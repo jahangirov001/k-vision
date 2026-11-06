@@ -228,7 +228,8 @@ async function boot() {
   $("#secClusters").classList.toggle("open", secOpen);
   $("#secClustersHead").setAttribute("aria-expanded", String(secOpen));
   $("#secClustersHead").onclick = () => toggleSection("Clusters", !$("#secClusters").classList.contains("open"));
-  $("#ns").onchange = () => { S.ns = $("#ns").value; store.set("ns", S.ns); if (S.map) showMap(null, ["helm", "cost", "argo"].includes(S.mapScope) ? S.mapScope : S.ns ? "namespace" : S.mapScope); else if (S.overview) showOverview(); else load(); };
+  $("#ns").onchange = () => { S.ns = $("#ns").value; store.set("ns", S.ns); syncNs(); nsChanged(); };
+  wireNsPicker();
   $("#filter").oninput = () => setFilter($("#filter").value, false);
   $("#filterClear").onclick = () => setFilter("");
   $("#filterHelpBtn").onclick = toggleFilterHelp;
@@ -300,16 +301,16 @@ async function showOverview(ns) {
   leaveOverview();
   S.overview = true;
   clearTimeout(S.timer);
-  if (ns) { S.ns = ns; $("#ns").value = ns; store.set("ns", ns); }
+  if (ns) { S.ns = ns; $("#ns").value = ns; store.set("ns", ns); syncNs(); }
   $("#tableWrap").hidden = true;
   $("#filterArea").hidden = true;
   $("#overview").hidden = false;
   $("#crumbKind").textContent = "Namespace Overview";
   markNav();
   const box = $("#overview");
-  if (!S.ns) {
-    let names = [];
-    try { names = await api("/api/namespaces?" + qs({ context: S.ctx })); } catch (_) {}
+  if (!S.ns || nsChosen().length > 1) {
+    let names = nsChosen().length > 1 ? nsChosen() : [];
+    if (!names.length) try { names = await api("/api/namespaces?" + qs({ context: S.ctx })); } catch (_) {}
     box.replaceChildren(el("div", { class: "ov-pick" },
       el("h2", { text: "Namespace Overview" }),
       el("p", { class: "muted", text: "Choose a namespace to see every resource in it, grouped by kind — like kubectl get all -n, but covering every kind, not just eight." }),
@@ -526,7 +527,7 @@ function openCreate(forKind) {
   const target = S.ctx;
   // (not "kindId": that would shadow the kindId() helper used below)
   const kind = forKind ? (findKind(forKind) ? { ...findKind(forKind), id: forKind } : null) : S.helm || S.overview ? null : S.kind;
-  const ns = S.ns || (S.contexts.find((c) => c.name === target) || {}).namespace || "default";
+  const ns = nsChosen()[0] || (S.contexts.find((c) => c.name === target) || {}).namespace || "default";
   $("#panel").hidden = false;
   $("#panelKind").replaceChildren(ctxTag(target, true), " Create");
   $("#panelTitle").textContent = kind ? `New ${kind.kind}` : "New resource";
@@ -603,7 +604,7 @@ async function showMap(ns, scope) {
   leaveOverview();
   S.map = true;
   clearTimeout(S.timer);
-  if (ns) { S.ns = ns; $("#ns").value = ns; store.set("ns", ns); if (!["cost", "helm", "argo"].includes(scope)) scope = "namespace"; }
+  if (ns) { S.ns = ns; $("#ns").value = ns; store.set("ns", ns); syncNs(); if (!["cost", "helm", "argo"].includes(scope)) scope = "namespace"; }
   S.mapScope = scope || S.mapScope || store.get("mapScope") || "cluster";
   store.set("mapScope", S.mapScope);
   $("#tableWrap").hidden = true;
@@ -619,9 +620,9 @@ async function showMap(ns, scope) {
   if (S.mapScope === "helm") return showHelmMap(box);
   if (S.mapScope === "cost") return showCost(box);
   if (S.mapScope === "argo") return showArgo(box);
-  if (!S.ns) {
-    let names = [];
-    try { names = await api("/api/namespaces?" + qs({ context: S.ctx })); } catch (_) {}
+  if (!S.ns || nsChosen().length > 1) {
+    let names = nsChosen().length > 1 ? nsChosen() : [];
+    if (!names.length) try { names = await api("/api/namespaces?" + qs({ context: S.ctx })); } catch (_) {}
     box.replaceChildren(el("div", { class: "ov-pick" },
       el("h2", { text: "Namespace Topology" }),
       el("p", { class: "muted", text: "Choose a namespace to see how its traffic, workloads and configuration connect — or see the whole cluster's topology." }),
@@ -917,7 +918,7 @@ async function showCost(box, fresh) {
       seg("Window", win, [["1d", "24h"], ["7d", "7 days"], ["30d", "30 days"], ["month", "This month"]], (v) => { store.set("costWindow", v); showMap(null, "cost"); }),
       seg("Group by", agg, [["namespace", "Namespace"], ["controller", "Workload"], ["pod", "Pod"], ["node", "Node"], ["label:team", "Team"]], (v) => { store.set("costAgg", v); showMap(null, "cost"); }),
       ns ? el("button", { type: "button", class: "ghost small", text: "← All namespaces",
-        onclick: () => { S.ns = ""; $("#ns").value = ""; store.set("ns", ""); store.set("costAgg", "namespace"); showMap(null, "cost"); } }) : null,
+        onclick: () => { S.ns = ""; $("#ns").value = ""; store.set("ns", ""); syncNs(); store.set("costAgg", "namespace"); showMap(null, "cost"); } }) : null,
       el("button", { type: "button", class: "ghost small", text: "Refresh", onclick: () => showCost(box, true) })),
     stats, clusters, legend,
     rep.rows.length ? el("div", { class: "cost-wrap" }, table) : el("div", { class: "empty" }, el("strong", { text: "No cost recorded" }), "OpenCost has nothing for this window yet.")].filter(Boolean));
@@ -1427,8 +1428,9 @@ async function switchContext(name, kid, ns) {
   // A namespace belongs to a cluster: a different cluster starts on All namespaces.
   // (Re-opening the same cluster -- start screen, refresh -- keeps the one chosen;
   // a tab passes the namespace it was on.)
+  S.nsNone = false;
   if (ns != null) { S.ns = ns; store.set("ns", ns); }
-  else if (name !== S.ctx) { S.ns = ""; store.set("ns", ""); $("#ns").value = ""; }
+  else if (name !== S.ctx) { S.ns = ""; store.set("ns", ""); syncNs(); $("#ns").value = ""; syncNs(); }
   S.ctx = name; S.everywhere = false; store.set("ctx", name);
   $("#ctx").value = name;
   renderCtxList();
@@ -1448,14 +1450,121 @@ async function switchContext(name, kid, ns) {
 }
 
 async function loadNamespaces() {
-  const sel = $("#ns");
-  sel.replaceChildren(el("option", { value: "", text: "All namespaces" }));
+  S.nsList = [];
   try {
-    const list = await api("/api/namespaces?" + qs({ context: S.ctx }));
-    for (const n of list) sel.append(el("option", { value: n, text: n }));
-    if (S.ns && !list.includes(S.ns)) S.ns = "";
-    sel.value = S.ns;
+    S.nsList = await api("/api/namespaces?" + qs({ context: S.ctx }));
+    // keep only chosen namespaces that exist in this cluster
+    const keep = nsChosen().filter((n) => S.nsList.includes(n));
+    if (keep.join(",") !== S.ns) { S.ns = keep.join(","); store.set("ns", S.ns); }
   } catch (_) { /* RBAC may forbid listing namespaces; All still works */ }
+  syncNs();
+}
+
+// ------------------------------------------------------------------ namespace picker
+// One, several or all namespaces. S.ns is "" (all), "a" or "a,b,c"; the server lists
+// each and merges them. The hidden <select id="ns"> mirrors S.ns for older code paths.
+const nsChosen = () => (S.ns ? S.ns.split(",").filter(Boolean) : []);
+const nsLabel = () => { const c = nsChosen(); return S.nsNone ? "no namespace" : !c.length ? "all namespaces" : c.length <= 3 ? c.join(", ") : `${c.length} namespaces`; };
+function syncNs() {
+  const sel = $("#ns");
+  sel.replaceChildren(el("option", { value: "", text: "All namespaces" }), ...(S.ns ? [el("option", { value: S.ns, text: S.ns })] : []));
+  sel.value = S.ns;
+  const ch = nsChosen();
+  // The box reads like a closed dropdown: what is chosen, as its placeholder; typing filters.
+  const f = $("#nsFind");
+  f.placeholder = S.nsNone ? "No namespace selected" : !ch.length ? "All namespaces" : ch.length === 1 ? ch[0] : ch.length <= 2 ? ch.join(", ") : `${ch.length} namespaces`;
+  $("#nsBtn").title = ch.length ? ch.join(", ") : "All namespaces";
+  $("#nsBtn").classList.toggle("some", ch.length > 0 || !!S.nsNone);
+  if (!$("#nsPop").hidden) renderNsList();
+}
+// The list: "All namespaces" first, then every namespace, each with a checkbox. With
+// nothing narrowed, everything is ticked (that is what "all" means); unticking one
+// leaves the rest ticked; ticking "All namespaces" goes back to all.
+function renderNsList() {
+  const q = ($("#nsFind").value || "").toLowerCase().trim();
+  const all = S.nsList || [];
+  const ch = nsChosen();
+  const none = !!S.nsNone;
+  const isAll = !none && ch.length === 0;
+  const on = (n) => !none && (isAll || ch.includes(n));
+  const items = all.filter((n) => !q || n.toLowerCase().includes(q));
+  const row = (label, checked, onToggle, cls, title) => el("label", { class: "ns-item" + (cls ? " " + cls : "") + (checked ? " on" : ""), role: "option", "aria-selected": String(checked), title: title || label },
+    el("input", { type: "checkbox", checked, onchange: (e) => onToggle(e.target.checked) }),
+    el("span", { text: label }));
+  const out = [];
+  if (!q) out.push(row("All namespaces", isAll, (v) => (v ? setNamespaces([]) : setNoNamespaces()), "ns-all-row",
+    isAll ? "Showing every namespace. Untick one below to leave it out." : "Show every namespace"));
+  for (const n of items) {
+    const r = row(n, on(n), (v) => {
+      let next = none ? [] : isAll ? all.slice() : ch.slice();
+      next = v ? [...new Set([...next, n])] : next.filter((x) => x !== n);
+      // every one ticked again means all; none ticked is allowed while you pick
+      if (!next.length) return setNoNamespaces();
+      setNamespaces(all.length && next.length === all.length ? [] : next);
+    });
+    r.append(el("button", { type: "button", class: "ns-only", text: "only", title: `Only ${n}`,
+      onclick: (e) => { e.preventDefault(); e.stopPropagation(); setNamespaces([n]); closeNsPop(); } }));
+    out.push(r);
+  }
+  if (!items.length) out.push(el("div", { class: "muted ns-none", text: all.length ? "No namespace matches" : "Namespaces can't be listed here; type one and press Enter" }));
+  $("#nsList").replaceChildren(...out);
+}
+function toggleNs(n, on) {
+  const all = S.nsList || [];
+  let ch = nsChosen().length ? nsChosen() : all.slice();
+  ch = on ? [...new Set([...ch, n])] : ch.filter((x) => x !== n);
+  setNamespaces(ch.length === all.length || !ch.length ? [] : ch);
+}
+// Apply a namespace choice and reload whatever is on screen.
+function setNamespaces(list) {
+  S.nsNone = false;
+  S.ns = [...new Set(list)].join(",");
+  store.set("ns", S.ns);
+  syncNs();
+  nsChanged();
+}
+// Everything unticked: an in-between state while picking (nothing is listed). Closing
+// the list with nothing ticked goes back to all namespaces.
+function setNoNamespaces() {
+  S.nsNone = true;
+  syncNs();
+  if (!S.map && !S.overview && S.kind && !S.empty) { clearTimeout(S.timer); S.seq++; setSpin(false); S.rows = []; S.errors = []; render(); }
+}
+function nsChanged() {
+  if (S.map) showMap(null, ["helm", "cost", "argo"].includes(S.mapScope) ? S.mapScope : S.ns ? "namespace" : S.mapScope);
+  else if (S.overview) showOverview();
+  else load();
+}
+function openNsPop() {
+  if (!$("#nsPop").hidden) return;
+  $("#nsPop").hidden = false; $("#nsBtn").setAttribute("aria-expanded", "true"); $("#nsBtn").classList.add("open");
+  renderNsList();
+}
+function closeNsPop() {
+  if (S.nsNone) setNamespaces([]);
+  $("#nsPop").hidden = true; $("#nsBtn").setAttribute("aria-expanded", "false"); $("#nsBtn").classList.remove("open");
+  $("#nsFind").value = ""; $("#nsFind").blur();
+}
+function wireNsPicker() {
+  const f = $("#nsFind");
+  f.onfocus = openNsPop;
+  f.onclick = (e) => { e.stopPropagation(); openNsPop(); };
+  $("#nsCaret").onclick = (e) => { e.stopPropagation(); $("#nsPop").hidden ? (f.focus(), openNsPop()) : closeNsPop(); };
+  $("#nsBtn").onclick = (e) => { e.stopPropagation(); f.focus(); };
+  $("#nsPop").onclick = (e) => e.stopPropagation();
+  $("#nsPop").onmousedown = (e) => { if (e.target !== f) e.preventDefault(); }; // keep focus in the box
+  document.addEventListener("click", () => { if (!$("#nsPop").hidden) closeNsPop(); });
+  f.oninput = renderNsList;
+  f.onkeydown = (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); closeNsPop(); }
+    if (e.key === "Enter") {
+      const v = f.value.trim();
+      if (!v) return closeNsPop();
+      const list = S.nsList || [];
+      const n = list.includes(v) ? v : list.find((x) => x.toLowerCase().includes(v.toLowerCase())) || v;
+      setNamespaces([n]); closeNsPop();
+    }
+  };
 }
 
 function findKind(q) {
@@ -1608,6 +1717,7 @@ function setEverywhere(on) {
 async function load() {
   if (!S.kind || S.overview || S.map || S.empty) return;
   clearTimeout(S.timer);
+  if (S.nsNone) { S.rows = []; S.errors = []; setSpin(false); return render(); }
   const seq = ++S.seq;
   setSpin(true);
   try {
@@ -1745,7 +1855,7 @@ function render() {
   if (S.map || S.overview) return; // a list load finishing late must not retitle the map / overview
   $("#crumbKind").textContent = S.kind ? S.kind.kind + (S.kind.kind.endsWith("s") ? "" : "s") : "";
   const where = S.everywhere ? (S.onlyCtx ? `${short(S.onlyCtx)} (of every cluster)` : `every cluster`) : short(S.ctx);
-  $("#crumbWhere").textContent = `${where} · ${S.ns || "all namespaces"} · ${rows.length} of ${S.rows.length}`;
+  $("#crumbWhere").textContent = `${where} · ${nsLabel()} · ${rows.length} of ${S.rows.length}`;
   renderErrors();
 
   $("#table thead").replaceChildren(el("tr", {}, cols.map((c, i) => c.cls === "pick" ? pickHead(rows) :
@@ -1760,7 +1870,8 @@ function render() {
     } else {
       const why = S.errors.length ? ["Could not load this list", "See the message above."]
         : S.rows.length ? ["No rows match", "Change the filter or the health tab, or press Esc to clear it."]
-        : ["Nothing here", `No ${S.kind ? S.kind.kind : "objects"} in ${S.ns || "any namespace"}.`];
+        : S.nsNone ? ["No namespace selected", "Tick one or more namespaces in the sidebar."]
+        : ["Nothing here", `No ${S.kind ? S.kind.kind : "objects"} in ${S.ns ? nsLabel() : "any namespace"}.`];
       tbody.replaceChildren(el("tr", {}, el("td", { colspan: cols.length },
         el("div", { class: "empty" }, el("strong", { text: why[0] }), why[1]))));
     }
@@ -1790,7 +1901,7 @@ function render() {
       else if (c.cls === "ctx") td = el("td", {}, ctxTag(r.context));
       else if (c.cls === "usage") td = usageCell(v, c.name);
       else if (c.cls === "ns-link") td = el("td", { class: "ns-link" }, el("a", { href: "#", text: v, title: `Show only ${v}`,
-        onclick: (e) => { e.preventDefault(); e.stopPropagation(); S.ns = v; $("#ns").value = v; store.set("ns", v); load(); } }));
+        onclick: (e) => { e.preventDefault(); e.stopPropagation(); S.ns = v; $("#ns").value = v; store.set("ns", v); syncNs(); load(); } }));
       else {
         td = el("td", { class: c.cls, text: v, title: v });
         if (c.name === "RESTARTS" && parseInt(v, 10) > 0) td.classList.add("hot");

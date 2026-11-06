@@ -344,11 +344,15 @@ func (c *Cluster) cost(ctx context.Context, window, aggregate, namespace string)
 		if cluster != "" {
 			f = fmt.Sprintf("cluster:%q", cluster)
 		}
-		if namespace != "" {
+		if nss := SplitNamespaces(namespace); len(nss) > 0 {
 			if f != "" {
 				f += "+"
 			}
-			f += fmt.Sprintf("namespace:%q", namespace)
+			q := make([]string, len(nss))
+			for i, n := range nss {
+				q[i] = fmt.Sprintf("%q", n)
+			}
+			f += "namespace:" + strings.Join(q, ",") // OpenCost: any of these
 		}
 		return f
 	}

@@ -126,7 +126,59 @@ const (
 )
 
 // List returns every object of a kind, in one namespace or all ("" = all).
+// SplitNamespaces turns "a,b, c" into [a b c]; "" (all namespaces) into nil.
+func SplitNamespaces(ns string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, n := range strings.Split(ns, ",") {
+		if n = strings.TrimSpace(n); n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func (c *Cluster) List(ctx context.Context, k Kind, namespace string) ([]Row, []string, error) {
+	// Several namespaces ("a,b"): Kubernetes lists one namespace or all. For a few,
+	// one list per namespace (cheap, and works with namespace-scoped RBAC); for many,
+	// one cluster-wide list filtered here.
+	if nss := SplitNamespaces(namespace); len(nss) > 1 && k.Namespaced {
+		if len(nss) > 3 {
+			rows, cols, err := c.list(ctx, k, "")
+			if err != nil {
+				return nil, nil, err
+			}
+			want := map[string]bool{}
+			for _, n := range nss {
+				want[n] = true
+			}
+			kept := rows[:0]
+			for _, r := range rows {
+				if want[r.Namespace] {
+					kept = append(kept, r)
+				}
+			}
+			return kept, cols, nil
+		}
+		var all []Row
+		var cols []string
+		for _, n := range nss {
+			rows, cs, err := c.list(ctx, k, n)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%s: %w", n, err)
+			}
+			cols = cs
+			all = append(all, rows...)
+		}
+		return all, cols, nil
+	} else if len(nss) == 1 {
+		namespace = nss[0]
+	}
+	return c.list(ctx, k, namespace)
+}
+
+func (c *Cluster) list(ctx context.Context, k Kind, namespace string) ([]Row, []string, error) {
 	ri := c.Dynamic.Resource(k.GVR())
 	// Pods also get live CPU / memory, read alongside the list so it adds no wait.
 	var usage map[string]Usage

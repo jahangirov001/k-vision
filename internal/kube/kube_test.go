@@ -132,12 +132,12 @@ func TestHumanAge(t *testing.T) {
 func TestProtectedByDefault(t *testing.T) {
 	m := &Manager{safe: regexpMust(DefaultSafe)}
 	for ctx, want := range map[string]bool{
-		"arn:aws:eks:eu-central-1:111111111111:cluster/shop-prod":     true,
-		"arn:aws:eks:eu-central-1:222222222222:cluster/ops-prod": true,
-		"ops-prod": true,
-		"ml-trials":  true,
-		"arn:aws:eks:eu-central-1:333333333333:cluster/payments-dev":         true,
-		"arn:aws:eks:eu-central-1:333333333333:cluster/shared-dev": true,
+		"arn:aws:eks:eu-central-1:111111111111:cluster/shop-prod": true,
+		"arn:aws:eks:eu-central-1:222222222222:cluster/ops-prod":  true,
+		"ops-prod":  true,
+		"ml-trials": true,
+		"arn:aws:eks:eu-central-1:333333333333:cluster/payments-dev": true,
+		"arn:aws:eks:eu-central-1:333333333333:cluster/shared-dev":   true,
 		"staging-api":    true,
 		"kind-local":     false,
 		"minikube":       false,
@@ -523,5 +523,13 @@ func TestClusterMap(t *testing.T) {
 	}
 	if links["shop>apps"] != 2 || links["kube-system>infra"] != 1 {
 		t.Fatalf("links: %v", links)
+	}
+}
+
+func TestSplitNamespaces(t *testing.T) {
+	for in, want := range map[string]string{"": "", "a": "a", "a,b": "a|b", " a , b ,a,": "a|b"} {
+		if got := strings.Join(SplitNamespaces(in), "|"); got != want {
+			t.Errorf("SplitNamespaces(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

@@ -962,3 +962,48 @@ td.usage .u-val { text-align: right; }
 #secClusters:not(.open) > .sec-head .sec-cur::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   background: hsl(var(--h, 212) 60% 52%); margin-right: 7px; vertical-align: 1px; }
 #secClusters:not(.open) > .sec-head .sec-cur { padding-left: 22px; font-size: var(--fs-xs); overflow-wrap: normal; word-break: normal; }
+
+/* ---------- namespace picker: one, several or all */
+.ns-pick { position: relative; }
+.ns-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font-size: var(--fs-sm); cursor: pointer; }
+.ns-btn:hover { border-color: var(--accent); }
+.ns-btn.some { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); font-weight: 600; }
+.ns-btn #nsBtnText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-caret { color: var(--muted); font-size: 11px; }
+.ns-pop { position: absolute; left: 0; right: -60px; top: calc(100% + 4px); z-index: 30; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 14px 34px -10px rgba(15, 22, 40, .35); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.ns-pop[hidden] { display: none; }
+.ns-pop input { width: 100%; font-size: var(--fs-sm); }
+.ns-acts { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); padding: 0 2px; }
+.ns-list { max-height: 320px; overflow: auto; display: flex; flex-direction: column; }
+.ns-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px;
+  font: var(--fs-sm) var(--font-mono); cursor: pointer; }
+.ns-item:hover { background: var(--row-hover); }
+.ns-item.on span { color: var(--accent); font-weight: 600; }
+.ns-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-item input { margin: 0; accent-color: var(--accent); }
+.ns-only { border: 0; background: transparent; color: var(--faint); font-size: 10px; padding: 1px 6px; border-radius: 5px; visibility: hidden; font-family: var(--font-ui); }
+.ns-item:hover .ns-only { visibility: visible; }
+.ns-only:hover { color: var(--accent); background: var(--accent-soft); }
+.ns-none { padding: 8px 6px; font-size: var(--fs-xs); }
+.ns-pop { right: 0; }
+.ns-acts { gap: 8px; }
+.ns-acts .muted { white-space: nowrap; }
+
+/* Namespace picker v2: a typeable box + a checklist with "All namespaces" first */
+.ns-btn { padding: 0 8px 0 10px; cursor: text; }
+.ns-btn.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ns-btn input { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; padding: 7px 0; font-size: var(--fs-sm); color: var(--text); }
+.ns-btn input:focus { box-shadow: none; outline: none; }
+.ns-btn input::placeholder { color: var(--text); opacity: 1; }
+.ns-btn.some input::placeholder { font-weight: 600; color: var(--accent); }
+.ns-btn.open input::placeholder { color: var(--faint); font-weight: 400; }
+.ns-caret { cursor: pointer; padding: 4px; }
+.ns-pop { padding: 4px; }
+.ns-item { grid-template-columns: auto minmax(0, 1fr) auto; font-family: var(--font-ui); padding: 6px 8px; }
+.ns-item span { font-family: var(--font-mono); }
+.ns-item.on span { color: var(--text); font-weight: 500; }
+.ns-all-row { border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
+.ns-all-row span { font-family: var(--font-ui); font-weight: 600; }
+.ns-item input { width: 15px; height: 15px; }

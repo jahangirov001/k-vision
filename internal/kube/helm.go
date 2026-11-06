@@ -127,6 +127,17 @@ func (r *helmRaw) summary() HelmRelease {
 
 // helmSecrets lists the release Secrets, newest revision first per release.
 func (c *Cluster) helmSecrets(ctx context.Context, namespace, release string) ([]*helmRaw, error) {
+	if nss := SplitNamespaces(namespace); len(nss) > 1 {
+		var out []*helmRaw
+		for _, n := range nss {
+			r, err := c.helmSecrets(ctx, n, release)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, r...)
+		}
+		return out, nil
+	}
 	sel := "owner=helm"
 	if release != "" {
 		sel += ",name=" + release
