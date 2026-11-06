@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-Vision</title>
+<script>
+  // Before first paint, so a saved light/dark choice never flashes the other theme.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("kc.theme"); } catch (_) {}
+    if (t !== "light" && t !== "dark") {
+      // System: the native window tells us; a browser answers the media query.
+      t = typeof window.__kcSystemDark === "boolean" ? (window.__kcSystemDark ? "dark" : "light")
+        : (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    }
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<link rel="stylesheet" href="vendor/xterm.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="splitter v right" id="sideSplit" role="separator" aria-orientation="vertical" aria-label="Resize the sidebar" title="Drag to resize · double-click to reset"></div>
+    <div class="brand" id="brandHome" role="button" tabindex="0" title="Start screen">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="wheel">
+        <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12.00 8.40L12.00 1.80M14.81 9.76L19.97 5.64M15.51 12.80L21.94 14.27M13.56 15.24L16.43 21.19M10.44 15.24L7.57 21.19M8.49 12.80L2.06 14.27M9.19 9.76L4.03 5.64"/></g>
+        <circle cx="12" cy="12" r="3.3" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.5" class="iris"/>
+      </svg>
+      <span>K-Vision</span>
+    </div>
+
+    <div class="sec open" data-sec="Clusters" id="secClusters">
+      <button type="button" class="sec-head" id="secClustersHead" aria-expanded="true">
+        <span class="sec-chev">›</span><span class="sec-ico">◎</span><span class="sec-name">Clusters</span>
+        <span id="secClustersCur" class="sec-cur"></span>
+      </button>
+      <div class="sec-body">
+        <select id="ctx" hidden></select>
+        <input id="ctxFind" placeholder="Find a cluster" autocomplete="off" spellcheck="false" aria-label="Find a cluster">
+        <ul id="ctxList" class="ctx-list" role="listbox" aria-label="Clusters"></ul>
+        <div id="ctxAll" class="ctx-all" hidden>Every cluster <button type="button" class="ghost small" id="ctxAllBack">Back to one</button></div>
+        <button id="btnClusters" type="button" class="link-btn">Manage clusters</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="ns" class="lbl">Namespace</label>
+      <select id="ns"><option value="">All namespaces</option></select>
+    </div>
+
+    <nav id="nav" aria-label="Resources"></nav>
+
+    <div class="side-foot">
+      <button id="btnEverywhere" class="side-btn" type="button">
+        <span class="ico">◎</span><span id="everyLabel">All clusters</span>
+      </button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="viewTabs" class="vtabs" role="tablist" aria-label="Open views" hidden></div>
+    <header id="bar">
+      <div class="crumb">
+        <span id="crumbKind"></span>
+        <span id="crumbWhere"></span>
+      </div>
+      <div class="bar-right">
+        <span id="spin" class="spin" hidden aria-label="Refreshing"></span>
+        <span id="updated" class="muted"></span>
+        <button id="btnCreate" class="create-btn" type="button" title="Create a resource from YAML (N)">＋ Create</button>
+        <button id="btnRefresh" class="icon-btn" type="button" title="Refresh (R)">↻</button>
+        <button id="btnPalette" class="kbd-btn" type="button" title="Command palette">
+          <span>Jump to…</span><kbd>⌘K</kbd>
+        </button>
+      </div>
+    </header>
+
+    <section id="filterArea">
+      <div class="filter-box">
+        <span class="filter-ico">⌕</span>
+        <input id="filter" placeholder="Filter: name, ns:shop, status:crash|error, restarts>3, age<1h, app=web, -kube-system" autocomplete="off" spellcheck="false" aria-label="Filter">
+        <button id="filterClear" class="icon-btn small" type="button" title="Clear (Esc)" hidden>✕</button>
+        <button id="filterHelpBtn" class="icon-btn small" type="button" title="Filter syntax" aria-expanded="false">?</button>
+      </div>
+      <div class="filter-row">
+        <div id="health" class="health" role="group" aria-label="Health"></div>
+        <div id="chips" class="chips"></div>
+        <div id="quick" class="quick"></div>
+      </div>
+      <div id="filterHelp" class="filter-help" hidden></div>
+    </section>
+
+    <div id="clusters" class="clusters" hidden></div>
+    <div id="errors"></div>
+    <div id="selBar" class="selbar" hidden>
+      <strong id="selCount"></strong>
+      <span id="selWhere" class="muted"></span>
+      <span class="grow"></span>
+      <button id="selClear" type="button" class="ghost">Clear</button>
+      <button id="selLogs" type="button" hidden>Logs</button>
+      <button id="selDelete" type="button" class="danger">Delete…</button>
+    </div>
+    <div id="tableWrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+    <div id="overview" class="overview" hidden></div>
+    <div id="mapView" class="mapview" hidden></div>
+    <section id="emptyView" class="empty-view" hidden aria-label="Nothing open">
+      <canvas id="emptyArt" class="empty-art" aria-hidden="true"></canvas>
+      <div class="empty-msg">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="wl-wheel">
+          <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12.00 8.40L12.00 1.80M14.81 9.76L19.97 5.64M15.51 12.80L21.94 14.27M13.56 15.24L16.43 21.19M10.44 15.24L7.57 21.19M8.49 12.80L2.06 14.27M9.19 9.76L4.03 5.64"/></g>
+          <circle cx="12" cy="12" r="3.3" fill="currentColor"/>
+          <circle cx="12" cy="12" r="1.5" class="iris"/>
+        </svg>
+        <h2>Nothing open</h2>
+        <p class="muted" id="emptyHint">Pick a resource, Topology or Cost in the sidebar, or press ⌘K.</p>
+      </div>
+    </section>
+  </main>
+
+  <section id="panel" hidden>
+    <div class="splitter v" id="panelSplit" role="separator" aria-orientation="vertical" aria-label="Resize the details panel" title="Drag to resize · double-click to reset"></div>
+    <header>
+      <div class="panel-head">
+        <div id="panelKind" class="eyebrow"></div>
+        <div id="panelTitle"></div>
+      </div>
+      <button id="panelClose" class="icon-btn" type="button" title="Close (Esc)">✕</button>
+    </header>
+    <div id="panelTabs" role="tablist"></div>
+    <div id="panelActions"></div>
+    <div id="panelBody"></div>
+  </section>
+
+  <section id="dock" hidden aria-label="Sessions">
+    <div class="splitter h" id="dockResize" role="separator" aria-orientation="horizontal" aria-label="Resize the sessions panel" title="Drag to resize · double-click to reset"></div>
+    <div class="dock-bar">
+      <div id="dockTabs" role="tablist"></div>
+      <span class="grow"></span>
+      <button id="dockSplit" type="button" class="ghost small" aria-pressed="false" hidden>◫ Split</button>
+      <button id="dockDir" type="button" class="ghost small icon-btn" hidden>⇆</button>
+      <button id="dockCloseAll" type="button" class="ghost small" title="Close every tab">Close all</button>
+      <button id="dockToggle" type="button" class="ghost icon-btn small" title="Minimize or restore">▾</button>
+    </div>
+    <div id="dockBody"></div>
+  </section>
+</div>
+
+<section id="welcome" hidden aria-label="Choose a cluster">
+  <canvas id="wlArt" class="wl-art" aria-hidden="true"></canvas>
+  <div class="wl-inner">
+    <header class="wl-head">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="wl-wheel">
+        <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12.00 8.40L12.00 1.80M14.81 9.76L19.97 5.64M15.51 12.80L21.94 14.27M13.56 15.24L16.43 21.19M10.44 15.24L7.57 21.19M8.49 12.80L2.06 14.27M9.19 9.76L4.03 5.64"/></g>
+        <circle cx="12" cy="12" r="3.3" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.5" class="iris"/>
+      </svg>
+      <div>
+        <h1>K-Vision</h1>
+        <p id="wlSub" class="wl-sub"></p>
+      </div>
+    </header>
+
+    <div class="wl-pick" id="wlPick">
+      <label class="wl-pick-label" for="wlFind">Choose a cluster</label>
+      <div class="wl-combo" id="wlCombo">
+        <span class="wl-combo-led" id="wlComboLed"></span>
+        <input id="wlFind" placeholder="Select or type a cluster name…" autocomplete="off" spellcheck="false" role="combobox"
+          aria-expanded="false" aria-controls="wlDrop" aria-label="Choose a cluster">
+        <button type="button" class="wl-combo-btn" id="wlComboBtn" aria-label="Show clusters" tabindex="-1">▾</button>
+        <div class="wl-drop" id="wlDrop" role="listbox" hidden>
+          <div id="wlRecent" class="wl-section" hidden>
+            <h2>Recent</h2>
+            <div id="wlRecentList" class="wl-rows"></div>
+          </div>
+          <div class="wl-section">
+            <h2 id="wlAllTitle">Clusters</h2>
+            <div id="wlList" class="wl-rows"></div>
+          </div>
+        </div>
+      </div>
+      <div class="wl-chosen" id="wlChosen" hidden></div>
+      <button type="button" class="primary wl-go" id="wlGo" disabled>Continue →</button>
+    </div>
+
+    <footer class="wl-foot">
+      <button id="wlEvery" type="button" class="wl-every">
+        <span class="wl-every-ico">◎</span>
+        <span><strong>All clusters at once</strong><span class="muted">Search every cluster in one list</span></span>
+      </button>
+      <span class="grow"></span>
+      <button id="wlManage" type="button" class="link-btn">Manage clusters</button>
+    </footer>
+  </div>
+</section>
+
+<div id="palette" class="overlay" hidden>
+  <div class="dialog palette" role="dialog" aria-label="Command palette">
+    <input id="paletteInput" placeholder="Resource type, cluster or action…" autocomplete="off" spellcheck="false">
+    <ul id="paletteList"></ul>
+    <div class="palette-foot"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> open <kbd>esc</kbd> close</div>
+  </div>
+</div>
+
+<div id="dialog" class="overlay" hidden>
+  <form class="dialog" id="dialogForm" role="dialog" aria-labelledby="dialogTitle">
+    <h3 id="dialogTitle"></h3>
+    <p id="dialogText"></p>
+    <div id="dialogWhere" class="where"></div>
+    <label id="dialogLabel" for="dialogInput" class="lbl"></label>
+    <input id="dialogInput" autocomplete="off" spellcheck="false">
+    <div class="row">
+      <button id="dialogCancel" type="button">Cancel</button>
+      <button id="dialogOk" type="submit" class="primary">Confirm</button>
+    </div>
+  </form>
+</div>
+
+<div id="toast" role="status" hidden></div>
+
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
+<script src="filter.js"></script>
+<script src="logfmt.js"></script>
+<script src="templates.js"></script>
+<script src="graph.js"></script>
+<script src="hero.js"></script>
+<script src="tabs.js"></script>
+<script src="app.js"></script>
+<script src="dock.js"></script>
+</body>
+</html>
