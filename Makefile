@@ -3,7 +3,7 @@ BIN      = kv
 GOBIN   ?= $(shell go env GOPATH)/bin
 APP      = $(HOME)/Applications/K-Vision.app
 
-.PHONY: build test install app uninstall release dist release-mac clean
+.PHONY: build test install app uninstall release dist clean
 
 build:
 	go build -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/kv
@@ -72,11 +72,6 @@ dist: test
 	@rm -rf dist/stage
 	@cd dist && shasum -a 256 K-Vision-* > SHA256SUMS
 	@ls -lh dist
-
-# The macOS part of a release: build on this Mac and upload to the GitLab release.
-#   GITLAB_TOKEN=glpat-... make release-mac
-release-mac:
-	@packaging/release-mac.sh
 
 clean:
 	rm -rf $(BIN) dist

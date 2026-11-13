@@ -1,0 +1,30 @@
+# Tests on every push and pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Go and JavaScript tests
+        run: make test
+      - name: Every platform still compiles
+        run: |
+          for p in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64; do
+            echo "  $p"
+            GOOS=${p%/*} GOARCH=${p#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd/kv
+          done

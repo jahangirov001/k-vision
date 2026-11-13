@@ -20,7 +20,7 @@ const Tabs = (() => {
     const c = short(S.ctx);
     if (S.map) {
       const scope = S.mapScope || "cluster";
-      const name = { cluster: "Cluster Topology", namespace: "Namespace Topology", helm: "Helm Topology", cost: "Cost", argo: "Argo CD" }[scope] || "Topology";
+      const name = { cluster: "Cluster Topology", namespace: "Namespace Topology", helm: "Helm Topology", cost: "Cost", argo: "Argo CD", events: "Warnings" }[scope] || "Topology";
       return { key: `map:${scope}|${S.ctx}|${scope === "namespace" ? S.ns : ""}`, title: `${name}${scope === "namespace" && S.ns ? " · " + S.ns : ""} - ${c}`,
         ctx: S.ctx, ns: S.ns, view: "map", scope };
     }

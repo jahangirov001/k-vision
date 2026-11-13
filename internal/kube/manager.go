@@ -33,6 +33,9 @@ type Cluster struct {
 	Dynamic   dynamic.Interface
 	Discovery discovery.CachedDiscoveryInterface
 	Mapper    meta.ResettableRESTMapper
+
+	pcMu sync.Mutex
+	pc   map[string]printerCache // a CRD's own columns, by kind id; see printercols.go
 }
 
 // Manager knows every context in the kubeconfig and hands out a Cluster per context.

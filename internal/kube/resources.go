@@ -204,6 +204,19 @@ func (c *Cluster) list(ctx context.Context, k Kind, namespace string) ([]Row, []
 	for i := range list.Items {
 		rows = append(rows, toRow(k, &list.Items[i]))
 	}
+	// A custom resource with no columns of ours: show the ones its CRD declares
+	// (additionalPrinterColumns), like kubectl get and Lens.
+	if cols == nil && k.Group != "" {
+		if pcs := c.printerColumns(ctx, k); len(pcs) > 0 {
+			cols = make([]string, 0, len(pcs))
+			for _, pc := range pcs {
+				cols = append(cols, pc.Name)
+			}
+			for i := range list.Items {
+				addPrinterCells(&rows[i], pcs, list.Items[i].Object)
+			}
+		}
+	}
 	<-usageDone
 	if k.ID() == "pods" {
 		objs := make(map[string]map[string]any, len(list.Items))

@@ -1,7 +1,10 @@
+<img src="docs/images/logo.png" width="64" align="left" alt="">
+
 # Installing K-Vision
 
-K-Vision is one program, `kv`: a terminal UI (`kv`) and a desktop window (`kv ui`) for every Kubernetes cluster
+K-Vision is one program, `kv`: a desktop window (`kv ui`) and a terminal UI (`kv`) for every Kubernetes cluster
 in your kubeconfig. Installing it needs **no admin rights**, and nothing is installed into your clusters.
+<br clear="left">
 
 **Before you start:** you need what `kubectl` already needs to reach your clusters -- a kubeconfig
 (`~/.kube/config`) and, for EKS, the AWS CLI with a valid login (`aws sso login`). If `kubectl get nodes` works,
@@ -16,7 +19,8 @@ There are two ways to get it:
 
 ## A. Download a release
 
-1. Open this project in GitLab → **Deploy → Releases** (or the **Releases** link on the project page).
+1. Open the **[latest release](https://github.com/jahangirov001/k-vision/releases/latest)** (or **Releases**
+   on the right of the project page).
 2. Take the newest release and download the file for your computer:
 
    | Your computer | File |
@@ -115,14 +119,14 @@ You need **Git** and **Go 1.27** or newer. On a Mac also the Xcode command line 
 (`xcode-select --install`) -- they build the native window.
 
 ```sh
-git clone <this repository's clone URL> k-vision
+git clone https://github.com/jahangirov001/k-vision.git
 cd k-vision
 ./install.sh                 # macOS: builds and installs K-Vision.app + kv
                              # Linux: builds and installs kv
 ```
 On Windows (PowerShell, with Go installed):
 ```powershell
-git clone <this repository's clone URL> k-vision
+git clone https://github.com/jahangirov001/k-vision.git
 cd k-vision
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
@@ -152,24 +156,17 @@ cluster's own login) and press **R** to refresh. `kv help` lists every terminal 
 
 ## Making a release (maintainers)
 
-The pipeline builds Windows and Linux; the Mac app can only be built on a Mac, so that one step runs on yours.
-Release files live on the **Release page**, never in git (`dist/` is in `.gitignore` on purpose).
+Everything is built by GitHub Actions (`.github/workflows/release.yml`), including the Mac app, on GitHub's
+Mac runners. Release files are attached to the **Releases** page and are never kept in git (`dist/` is ignored).
 
-1. **Raise the version** in `internal/version/VERSION` (e.g. `1.0.2`), commit, push.
+1. **Raise the version** in `internal/version/VERSION` (e.g. `1.0.7`), commit and push.
 2. **Tag that commit** with the same number and push the tag:
    ```sh
-   git tag 1.0.2 && git push origin 1.0.2
+   git tag 1.0.7 && git push origin 1.0.7
    ```
-   The pipeline tests, builds the Windows and Linux packages and creates **Deploy → Releases → K-Vision 1.0.2**.
-   (It stops if the tag and `VERSION` differ.)
-3. **Add the Mac app** once the pipeline is green -- on a Mac, from the tag:
-   ```sh
-   git checkout 1.0.2
-   GITLAB_TOKEN=glpat-xxxx make release-mac     # builds the .zip/.dmg and uploads them to the 1.0.2 release
-   git checkout main
-   ```
-   The token is a GitLab personal access token with the `api` scope. `DRY=1 make release-mac` shows what it would
-   do without uploading.
+3. Watch it under **Actions → Release**. In about 10 minutes **Releases → K-Vision 1.0.7** has the Mac
+   `.dmg`/`.zip`, the Windows and Linux packages and `SHA256SUMS`. If the tag and `VERSION` don't match, the run
+   stops before publishing.
 
-If the project has a macOS runner (GitLab Premium/Ultimate), set the CI/CD variable `MACOS_RUNNER=true` and the
-pipeline builds the Mac app too -- then step 3 isn't needed.
+To try the build without publishing: **Actions → Release → Run workflow**. The files are then kept on that run
+as a downloadable artifact.

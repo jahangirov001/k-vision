@@ -787,6 +787,8 @@ func (m *Model) command(line string) tea.Cmd {
 		return m.costCmd(args)
 	case "argo", "argocd":
 		return m.argoCmd()
+	case "warnings", "warn", "problems":
+		return m.warningsCmd(args)
 	case "topology", "topo", "map":
 		return m.topologyCmd(args)
 	case "create", "new":

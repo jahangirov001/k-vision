@@ -34,6 +34,7 @@ var Commands = []Command{
 	{"overview", []string{"get-all"}, "<namespace>", "Namespace Overview: every resource in a namespace, grouped by kind", ":overview shop"},
 	{"topology", []string{"topo"}, "[ns|helm]", "Cluster Topology (pools ↔ namespaces); <ns>: its Ingress→Service→workload tree; helm: which release created what. +system adds platform namespaces", ":topology shop"},
 	{"helm", nil, "[charts|<release>]", "Helm releases or charts; a release: summary, then values · all · manifest · notes · history [rev]", ":helm shop-api values"},
+	{"warnings", []string{"warn", "problems"}, "[15m|1h|6h|24h]", "Cluster warnings: Warning events grouped by problem, broken first, with node pool and examples", ":warnings 6h"},
 	{"argo", []string{"argocd"}, "", "Argo CD dashboard: app health and sync, what needs a look, recent syncs, by project", ":argo"},
 	{"cost", nil, "[7d] [workload]", "Spend from OpenCost: by namespace (or workload/pod/node/team), idle, and what right-sizing would save", ":cost 30d workload"},
 	{"create", []string{"new"}, "[kind|-f file]", "Create from YAML: a template opens in $EDITOR; checked by a server dry run before it is created", ":create deployment"},

@@ -86,7 +86,7 @@ const NAV = [
   ["Access Control", "⛨", [["serviceaccounts", "Service Accounts"], ["clusterroles.rbac.authorization.k8s.io", "Cluster Roles"],
     ["roles.rbac.authorization.k8s.io", "Roles"], ["clusterrolebindings.rbac.authorization.k8s.io", "Cluster Role Bindings"],
     ["rolebindings.rbac.authorization.k8s.io", "Role Bindings"]]],
-  ["Cluster", "◉", [["nodes", "Nodes"], ["namespaces", "Namespaces"], ["events", "Events"]]],
+  ["Cluster", "◉", [["warnings", "Warnings"], ["nodes", "Nodes"], ["namespaces", "Namespaces"], ["events", "Events"]]],
   ["Argo CD", "⟳", [["argo", "Dashboard"], ["applications.argoproj.io", "Applications"], ["applicationsets.argoproj.io", "Application Sets"],
     ["appprojects.argoproj.io", "Projects"]]],
   ["Pod Autoscaling", "⇕", [["horizontalpodautoscalers.autoscaling", "HPAs"],
@@ -598,20 +598,21 @@ function openCreate(forKind) {
 // scope "cluster" draws the whole cluster (node pools ↔ namespaces); "namespace"
 // draws one namespace. Without a scope it keeps the last one.
 async function showMap(ns, scope) {
+  clearTimeout(S.evTimer);
   closePanel();
   S.flow = null;
   S.helm = null;
   leaveOverview();
   S.map = true;
   clearTimeout(S.timer);
-  if (ns) { S.ns = ns; $("#ns").value = ns; store.set("ns", ns); syncNs(); if (!["cost", "helm", "argo"].includes(scope)) scope = "namespace"; }
+  if (ns) { S.ns = ns; $("#ns").value = ns; store.set("ns", ns); syncNs(); if (!["cost", "helm", "argo", "events"].includes(scope)) scope = "namespace"; }
   S.mapScope = scope || S.mapScope || store.get("mapScope") || "cluster";
   store.set("mapScope", S.mapScope);
   $("#tableWrap").hidden = true;
   $("#filterArea").hidden = true;
   $("#mapView").hidden = false;
-  $("#crumbKind").textContent = { cluster: "Cluster Topology", helm: "Helm Topology", cost: "Cost", argo: "Argo CD" }[S.mapScope] || "Namespace Topology";
-  const secName = S.mapScope === "cost" ? "Cost" : S.mapScope === "argo" ? "Argo CD" : "Topology";
+  $("#crumbKind").textContent = { cluster: "Cluster Topology", helm: "Helm Topology", cost: "Cost", argo: "Argo CD", events: "Warnings" }[S.mapScope] || "Namespace Topology";
+  const secName = S.mapScope === "cost" ? "Cost" : S.mapScope === "argo" ? "Argo CD" : S.mapScope === "events" ? "Cluster" : "Topology";
   const mapSec = document.querySelector(`[data-sec="${secName}"]`);
   if (mapSec && !mapSec.classList.contains("open")) toggleSection(secName, true);
   markNav();
@@ -620,6 +621,7 @@ async function showMap(ns, scope) {
   if (S.mapScope === "helm") return showHelmMap(box);
   if (S.mapScope === "cost") return showCost(box);
   if (S.mapScope === "argo") return showArgo(box);
+  if (S.mapScope === "events") return showEvents(box);
   if (!S.ns || nsChosen().length > 1) {
     let names = nsChosen().length > 1 ? nsChosen() : [];
     if (!names.length) try { names = await api("/api/namespaces?" + qs({ context: S.ctx })); } catch (_) {}
@@ -922,6 +924,127 @@ async function showCost(box, fresh) {
       el("button", { type: "button", class: "ghost small", text: "Refresh", onclick: () => showCost(box, true) })),
     stats, clusters, legend,
     rep.rows.length ? el("div", { class: "cost-wrap" }, table) : el("div", { class: "empty" }, el("strong", { text: "No cost recorded" }), "OpenCost has nothing for this window yet.")].filter(Boolean));
+}
+
+// ------------------------------------------------------------------ warnings dashboard
+// Every Warning event of the cluster, grouped by what went wrong: "FailedMount ×42,
+// 12 pods, gitlab-runner-spot pool" is one card instead of 42 lines of
+// `kubectl get events`. Red = something is broken, amber = slow / waiting.
+async function showEvents(box) {
+  const ctx = S.ctx, ns = S.ns || "";
+  const win = S.evWindow || store.get("evWindow") || "1h";
+  $("#crumbKind").textContent = "Warnings";
+  $("#crumbWhere").textContent = `${short(ctx)} · ${nsLabel()} · loading…`;
+  if (!box.querySelector(".ev-grid")) box.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Reading the cluster's events…" })));
+  setSpin(true);
+  let d;
+  try { d = await api("/api/events?" + qs({ context: ctx, namespace: ns, window: win })); }
+  catch (e) { setSpin(false); return box.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Could not read events" }), e.message)); }
+  setSpin(false);
+  if (!S.map || S.mapScope !== "events" || S.ctx !== ctx) return;
+  $("#crumbWhere").textContent = `${short(ctx)} · ${nsLabel()} · last ${win}`;
+
+  const ago = (t) => { const s = Math.max(0, (Date.now() - new Date(t).getTime()) / 1000);
+    return s < 60 ? Math.round(s) + "s ago" : s < 3600 ? Math.round(s / 60) + "m ago" : s < 86400 * 2 ? Math.round(s / 3600) + "h ago" : Math.round(s / 86400) + "d ago"; };
+  // Open the object in its list. Many warnings are about objects that are already gone
+  // (CI job pods, replaced pods): then say so and show what was recorded about it.
+  const openObj = async (o, btn) => {
+    const k = findKind(o.kind === "Pod" ? "pods" : o.kind);
+    if (!k) return toast(`Can't open ${o.kind} ${o.name}`, true);
+    try { await api("/api/yaml?" + qs({ context: ctx, kind: kindId(k), namespace: o.namespace || "", name: o.name })); }
+    catch (e) {
+      if (!/not found/i.test(e.message)) return toast(e.message, true);
+      const mine = d.recent.filter((r) => r.kind === o.kind && r.name === o.name && r.namespace === o.namespace);
+      const lines = mine.length ? mine.map((r) => `${r.reason} ×${r.count} · ${ago(r.last)}\n${r.message}`).join("\n\n")
+        : d.groups.filter((g) => g.examples.some((x) => x.name === o.name && x.namespace === o.namespace)).map((g) => `${g.reason}\n${g.message}`).join("\n\n");
+      const where = btn && (btn.closest(".ev-card") || btn.closest(".argo-panel"));
+      if (!where) return toast(`${o.kind} ${o.name} no longer exists`);
+      for (const old of where.querySelectorAll(".ev-gone")) old.remove();
+      where.append(el("div", { class: "ev-gone" },
+        el("div", { class: "ev-gone-h" }, el("strong", { text: `${o.kind} ${o.namespace ? o.namespace + "/" : ""}${o.name} no longer exists` }),
+          el("span", { class: "muted", text: "deleted after these warnings · what was recorded:" }),
+          el("button", { type: "button", class: "ghost small", text: "✕", "aria-label": "Close", onclick: (e) => { e.stopPropagation(); e.target.closest(".ev-gone").remove(); } })),
+        el("pre", { class: "mono", text: lines || "(no message kept)" })));
+      return;
+    }
+    if (o.namespace) { S.ns = o.namespace; $("#ns").value = o.namespace; store.set("ns", o.namespace); syncNs(); }
+    setKind(kindId(k)).then(() => setFilter(o.name));
+  };
+  const tile = (label, value, sub, cls) => el("div", { class: "cm-stat" + (cls ? " " + cls : "") },
+    el("span", { class: "cm-stat-l", text: label }), el("strong", { text: value }), sub ? el("span", { class: "cm-stat-s", text: sub }) : null);
+  const red = d.groups.filter((g) => g.level === "bad");
+  const stats = el("div", { class: "cm-stats" },
+    tile("Warnings", String(d.warnings), `last ${win}`, d.warnings ? "warn" : "ok"),
+    tile("Problems", String(d.groups.length), `${red.length} broken · ${d.groups.length - red.length} slow / waiting`, red.length ? "bad" : ""),
+    tile("Objects affected", String(d.objects), ""),
+    tile("Top reason", d.byReason[0] ? d.byReason[0].name : "—", d.byReason[0] ? `${d.byReason[0].count} events` : ""),
+    tile("Busiest namespace", d.byNamespace[0] ? d.byNamespace[0].name : "—", d.byNamespace[0] ? `${d.byNamespace[0].count} events` : ""),
+    tile("Busiest node pool", d.byPool[0] ? d.byPool[0].name : "—", d.byPool[0] ? `${d.byPool[0].count} events` : ""));
+
+  // Warnings over time: one bar per bucket, the latest on the right.
+  const max = Math.max(1, ...d.timeline);
+  const tl = el("div", { class: "argo-bar ev-tl" },
+    el("div", { class: "argo-bar-h" }, el("strong", { text: "Warnings over time" }),
+      el("span", { class: "muted", text: ` · ${d.bucketMinutes} min per bar · newest on the right` })),
+    el("div", { class: "ev-bars" }, ...d.timeline.map((n, i) => {
+      const end = new Date(Date.now() - (d.timeline.length - 1 - i) * d.bucketMinutes * 60000);
+      return el("i", { style: `height:${n ? Math.max(6, (n * 100) / max) : 0}%`, title: `${n} warnings · until ${end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` });
+    })));
+
+  const panel = (title, sub, body, cls) => el("section", { class: "argo-panel" + (cls ? " " + cls : "") },
+    el("header", {}, el("h3", { text: title }), sub ? el("span", { class: "muted", text: sub }) : null), body);
+  const card = (g) => el("div", { class: "ev-card lvl-" + g.level },
+    el("div", { class: "ev-card-h" },
+      el("span", { class: "pill " + g.level, text: g.reason }),
+      el("strong", { text: `×${g.count}` }),
+      el("span", { class: "muted", text: `${g.objects} ${g.kind ? g.kind.toLowerCase() : "object"}${g.objects === 1 ? "" : "s"} · last ${ago(g.last)}` }),
+      el("span", { class: "grow" }),
+      g.pools && g.pools.length ? el("span", { class: "ev-chip", title: "Node pool", text: "⬡ " + g.pools.slice(0, 2).join(", ") + (g.pools.length > 2 ? ` +${g.pools.length - 2}` : "") }) : null,
+      el("span", { class: "ev-chip", title: g.namespaces.join(", "), text: g.namespaces.length === 1 ? g.namespaces[0] : `${g.namespaces.length} namespaces` })),
+    el("div", { class: "ev-msg mono", text: g.message, title: g.message }),
+    g.hint ? el("div", { class: "ev-hint", text: g.hint }) : null,
+    el("div", { class: "ev-objs" }, ...g.examples.map((o) => el("button", { type: "button", class: "ev-obj mono", title: `Open ${o.kind} ${o.namespace ? o.namespace + "/" : ""}${o.name}`,
+      onclick: (e) => openObj(o, e.currentTarget), text: (o.namespace ? o.namespace + "/" : "") + o.name })),
+      g.objects > g.examples.length ? el("span", { class: "muted", text: `+${g.objects - g.examples.length} more` }) : null));
+  const problems = panel("Problems", d.groups.length ? `${d.groups.length}, broken first` : "",
+    d.groups.length ? el("div", { class: "ev-cards" }, ...d.groups.slice(0, 40).map(card))
+      : el("div", { class: "argo-ok" }, el("span", { class: "hm-led argo-led h-ok" }), `No warnings in the last ${win}.`), "ev-problems");
+
+  const countList = (rows, onPick) => el("div", { class: "argo-counts" }, ...rows.slice(0, 10).map((r) =>
+    el("button", { type: "button", class: "argo-count", onclick: onPick ? () => onPick(r.name) : null, title: `${r.count} warnings` },
+      el("span", { class: "mono", text: r.name }),
+      el("span", { class: "cb" }, el("i", { class: "seg-warn", style: `width:${(r.count * 100) / (rows[0].count || 1)}%` })),
+      el("strong", { text: String(r.count) }))));
+  const recent = panel("Latest", "", el("table", { class: "argo-table" }, el("tbody", {}, ...d.recent.slice(0, 25).map((r) =>
+    el("tr", { class: "click", title: `${r.namespace ? r.namespace + "/" : ""}${r.name} · ${r.reason} ×${r.count} · ${ago(r.last)}\n${r.message}`, onclick: (e) => openObj(r, e.currentTarget) },
+      el("td", {}, el("span", { class: "hm-led argo-led h-" + r.level }), el("strong", { class: "mono", text: r.name })),
+      el("td", {}, el("span", { class: "pill " + r.level, text: r.reason })),
+      el("td", { class: "mono muted", text: ago(r.last) }))))));
+
+  const winBtns = el("div", { class: "health" }, ...["15m", "1h", "6h", "24h"].map((w) =>
+    el("button", { type: "button", "aria-pressed": String(w === win), text: w,
+      onclick: () => { S.evWindow = w; store.set("evWindow", w); showMap(null, "events"); } })));
+  box.replaceChildren(
+    el("div", { class: "map-bar" }, winBtns,
+      el("span", { class: "muted", text: "Warning events, grouped by what went wrong · click a name to open it · Kubernetes keeps events ~1 h by default" }),
+      el("span", { class: "grow" }),
+      el("button", { type: "button", class: "ghost small", text: "Refresh", onclick: () => showMap(null, "events") })),
+    ...(d.errors || []).map((e) => el("div", { class: "err-line", text: e })),
+    stats, tl,
+    el("div", { class: "ev-grid" }, problems,
+      el("div", { class: "ev-side" }, recent,
+        panel("By reason", "", countList(d.byReason)),
+        panel("By namespace", "", countList(d.byNamespace, (n) => { if (n === "(cluster)") return; S.ns = n; $("#ns").value = n; store.set("ns", n); syncNs(); showMap(null, "events"); })),
+        d.byPool.length ? panel("By node pool", "", countList(d.byPool)) : null)));
+  // Keep it live while it's open: refresh every 30 s.
+  clearTimeout(S.evTimer);
+  const tick = () => {
+    if (!S.map || S.mapScope !== "events" || S.ctx !== ctx) return;
+    // Don't wipe a note the person is reading, or refresh a hidden window.
+    if (document.hidden || box.querySelector(".ev-gone")) { S.evTimer = setTimeout(tick, 30000); return; }
+    showEvents(box);
+  };
+  S.evTimer = setTimeout(tick, 30000);
 }
 
 // ------------------------------------------------------------------ argo cd dashboard
@@ -1531,7 +1654,7 @@ function setNoNamespaces() {
   if (!S.map && !S.overview && S.kind && !S.empty) { clearTimeout(S.timer); S.seq++; setSpin(false); S.rows = []; S.errors = []; render(); }
 }
 function nsChanged() {
-  if (S.map) showMap(null, ["helm", "cost", "argo"].includes(S.mapScope) ? S.mapScope : S.ns ? "namespace" : S.mapScope);
+  if (S.map) showMap(null, ["helm", "cost", "argo", "events"].includes(S.mapScope) ? S.mapScope : S.ns ? "namespace" : S.mapScope);
   else if (S.overview) showOverview();
   else load();
 }
@@ -1601,10 +1724,12 @@ function buildNav() {
       el("span", { class: "nav-label", text: "Overview" }), el("span", { class: "n" })),
   ]));
   for (const [name, icon, items] of NAV) {
-    const links = items.filter(([id]) => id === "overview" || id === "map" || id === "portforwards" || served.has(id) || (id === "argo" && served.has("applications.argoproj.io"))).map(([id, label]) =>
+    const links = items.filter(([id]) => id === "overview" || id === "map" || id === "portforwards" || served.has(id) || (id === "argo" && served.has("applications.argoproj.io")) || (id === "warnings" && served.has("events"))).map(([id, label]) =>
       id === "portforwards" ? el("a", { "data-kind": "portforwards", class: "nav-overview", onclick: showForwards },
         el("span", { class: "nav-label", text: label }), el("span", { id: "pfCount", class: "count-pill", hidden: true }))
       : id === "argo" ? el("a", { "data-kind": "map:argo", class: "nav-overview", onclick: () => showMap(null, "argo") },
+        el("span", { class: "nav-label", text: label }), el("span", { class: "n" }))
+      : id === "warnings" ? el("a", { "data-kind": "map:events", class: "nav-overview", onclick: () => showMap(null, "events") },
         el("span", { class: "nav-label", text: label }), el("span", { class: "n" }))
       : id === "overview" ? el("a", { "data-kind": "overview", class: "nav-overview", onclick: () => showOverview() },
         el("span", { class: "nav-label", text: label }), el("span", { class: "n" }))
@@ -2468,6 +2593,7 @@ function paletteRender(keepSel) {
     { sec: "Actions", label: "Create a resource", hint: "N", keys: "create new add yaml apply plus", run: () => openCreate() },
     { sec: "Resources", label: "Namespace Overview", hint: "get all", keys: "all everything namespace overview get all", run: () => showOverview() },
     { sec: "Resources", label: "Cluster Topology", hint: "nodes ↔ namespaces", keys: "topology map graph diagram topology visual cluster nodes pools", run: () => showMap(null, "cluster") },
+    { sec: "Resources", label: "Warnings", hint: "cluster events, grouped", keys: "warnings events failing problems errors scheduling mount backoff dashboard", run: () => showMap(null, "events") },
     { sec: "Resources", label: "Argo CD Dashboard", hint: "apps, health, sync", keys: "argo argocd gitops dashboard applications sync health", run: () => showMap(null, "argo") },
     { sec: "Resources", label: "Cost Overview", hint: "OpenCost", keys: "cost money spend price opencost kubecost waste savings", run: () => showMap(null, "cost") },
     { sec: "Resources", label: "Helm Topology", hint: "release → resources", keys: "helm topology map release resources created owns", run: () => showMap(null, "helm") },

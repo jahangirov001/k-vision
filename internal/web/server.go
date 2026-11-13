@@ -332,6 +332,16 @@ func (s *server) routes() http.Handler {
 		defer cancel()
 		return c.ArgoDashboard(ctx)
 	})
+	api("GET /api/events", func(r *http.Request) (any, error) {
+		c, _, err := s.resolve(q(r, "context"), "")
+		if err != nil {
+			return nil, err
+		}
+		window, _ := time.ParseDuration(q(r, "window"))
+		ctx, cancel := timeout(r, 60*time.Second)
+		defer cancel()
+		return c.Events(ctx, q(r, "namespace"), window)
+	})
 	api("GET /api/cost", func(r *http.Request) (any, error) {
 		c, _, err := s.resolve(q(r, "context"), "")
 		if err != nil {

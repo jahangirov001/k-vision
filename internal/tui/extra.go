@@ -1453,3 +1453,113 @@ func argoText(d *kube.ArgoDashboard) string {
 	b.WriteString("\n" + stDim.Render(" :app  :applicationsets  :appprojects  list them; :app !ok shows only the ones that need a look") + "\n")
 	return b.String()
 }
+
+// ---------------------------------------------------------------- warnings
+
+// warningsCmd is :warnings [window] -- the window's Warnings dashboard as text.
+func (m *Model) warningsCmd(args []string) tea.Cmd {
+	if m.cluster == nil {
+		return nil
+	}
+	c, ns := m.cluster, m.namespace
+	window := time.Hour
+	if len(args) > 0 {
+		if d, err := time.ParseDuration(args[0]); err == nil {
+			window = d
+		}
+	}
+	m.status, m.isErr = "reading events…", false
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		d, err := c.Events(ctx, ns, window)
+		if err != nil {
+			return textMsg{err: err}
+		}
+		where := "all namespaces"
+		if ns != "" {
+			where = ns
+		}
+		return textMsg{title: "Warnings · " + short(c.Context) + " · " + where + " · last " + strings.TrimSuffix(strings.TrimSuffix(window.String(), "0s"), "0m"), body: warningsText(d)}
+	}
+}
+
+func warningsText(d *kube.EventsDashboard) string {
+	var b strings.Builder
+	red := 0
+	for _, g := range d.Groups {
+		if g.Level == kube.Failing {
+			red++
+		}
+	}
+	top := func(l []kube.EventCount) string {
+		if len(l) == 0 {
+			return "-"
+		}
+		return fmt.Sprintf("%s (%d)", l[0].Name, l[0].Count)
+	}
+	fmt.Fprintf(&b, " %s %d   %s %d (%s broken)   %s %d   %s %s   %s %s\n",
+		stHeader.Render("WARNINGS"), d.Warnings, stHeader.Render("PROBLEMS"), len(d.Groups), stBad.Render(fmt.Sprint(red)),
+		stHeader.Render("OBJECTS"), d.Objects, stHeader.Render("NAMESPACE"), top(d.ByNs), stHeader.Render("POOL"), top(d.ByPool))
+	for _, e := range d.Errors {
+		b.WriteString(" " + stBad.Render(e) + "\n")
+	}
+	b.WriteString("\n" + stSection.Render(" PROBLEMS") + stDim.Render("  broken first") + "\n")
+	if len(d.Groups) == 0 {
+		b.WriteString("  " + stOK.Render("No warnings in this window.") + "\n")
+		return b.String()
+	}
+	for i, g := range d.Groups {
+		if i == 30 {
+			fmt.Fprintf(&b, "  %s\n", stDim.Render(fmt.Sprintf("… %d more", len(d.Groups)-30)))
+			break
+		}
+		reason := stWarn.Render(g.Reason)
+		if g.Level == kube.Failing {
+			reason = stBad.Render(g.Reason)
+		}
+		where := strings.Join(g.Namespaces, ",")
+		if len(g.Namespaces) > 2 {
+			where = fmt.Sprintf("%d namespaces", len(g.Namespaces))
+		}
+		if len(g.Pools) > 0 {
+			where += " · pool " + strings.Join(g.Pools, ",")
+		}
+		fmt.Fprintf(&b, "\n  %s ×%d  %s\n", reason, g.Count, stDim.Render(fmt.Sprintf("%d %s · %s · last %s ago", g.Objects, strings.ToLower(g.Kind), where, shortAgo(g.Last))))
+		msg := g.Message
+		if len(msg) > 220 {
+			msg = msg[:220] + "…"
+		}
+		b.WriteString("    " + msg + "\n")
+		if g.Hint != "" {
+			b.WriteString("    " + stDim.Render("→ "+g.Hint) + "\n")
+		}
+		names := make([]string, 0, len(g.Examples))
+		for _, o := range g.Examples {
+			if o.Namespace != "" {
+				names = append(names, o.Namespace+"/"+o.Name)
+			} else {
+				names = append(names, o.Name)
+			}
+		}
+		more := ""
+		if g.Objects > len(g.Examples) {
+			more = fmt.Sprintf(" +%d more", g.Objects-len(g.Examples))
+		}
+		b.WriteString("    " + stDim.Render(strings.Join(names, "  ")+more) + "\n")
+	}
+	return b.String()
+}
+
+func shortAgo(t time.Time) string {
+	s := time.Since(t)
+	switch {
+	case s < time.Minute:
+		return fmt.Sprintf("%ds", int(s.Seconds()))
+	case s < time.Hour:
+		return fmt.Sprintf("%dm", int(s.Minutes()))
+	case s < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(s.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(s.Hours()/24))
+}

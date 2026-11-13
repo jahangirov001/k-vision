@@ -1,355 +1,197 @@
-# K-Vision
+<p align="center">
+  <img src="docs/images/logo.png" width="112" alt="K-Vision logo">
+</p>
 
-A Kubernetes console with two faces on one engine:
+<h1 align="center">K-Vision</h1>
 
-- **`kv`** — a terminal UI in the spirit of k9s: keyboard only, fast, every resource
-  type and CRD.
-- **`kv ui`** — a desktop window in the spirit of Lens: tables, side panel, YAML,
-  logs and an in-browser shell, with the same keys.
+<p align="center">
+  <b>See every Kubernetes cluster you work with, in one place.</b><br>
+  A desktop app and a terminal UI in one small program. Free, local, and no setup in your clusters.
+</p>
 
-Both run on `internal/kube`, so they always agree on what a cluster contains, what
-counts as unhealthy, and what a write is allowed to do.
+<p align="center">
+  <a href="https://github.com/jahangirov001/k-vision/releases/latest"><b>Download</b></a> ·
+  <a href="INSTALL.md">Install guide</a> ·
+  <a href="#what-you-can-do">Features</a> ·
+  <a href="#keyboard">Keys</a>
+</p>
 
-## What it does that k9s and Lens don't
+<p align="center">
+  <img src="docs/images/pods.png" alt="K-Vision showing the pods of a cluster with live CPU and memory" width="900">
+</p>
 
-- **Every cluster at once.** `:all pods !ok` (terminal) or **All clusters** (desktop)
-  lists one resource type across every kubeconfig context in parallel. A cluster
-  that can't be reached (expired SSO, private endpoint) is reported on its own line
-  and does not blank the view.
-- **"Why?" for pods.** `x` / the *Why?* tab reads the pod's status and events and
-  says what's wrong in a sentence. For example: *no node has enough cpu — check the
-  NodePool limits*, *crash-looping, last exit 137 OOMKilled*, *cannot pull image*,
-  or *exited with code 1 12d ago*.
-- **First-class views for your own stack.** ArgoCD Applications (sync, health,
-  revision), Karpenter NodePools and NodeClaims (nodes, CPU, limits), KEDA
-  ScaledObjects and HPAs get real columns. Any CRD with a `Ready` condition is
-  coloured, and Crossplane resources also show `NotSynced`.
-- **Safe by default.** Deleting or applying (editing) a resource asks you to type its
-  name and confirm. Scale, restart, cordon and drain ask for a confirmation click.
-  Deleting several at once on a real cluster asks you to type `delete`. Every change is
-  written to the audit log. Reading never asks: shells, logs and secret values open
-  directly, and shells and secret reveals are recorded in the audit log.
-- **Node shell.** `s` on a node, or the *Node shell* tab, gives a root shell on the
-  host, the way `kubectl debug node/…` does: a short-lived privileged pod on that
-  node (image `KV_NODE_SHELL_IMAGE`, default busybox from ECR Public, in
-  `KV_NODE_SHELL_NAMESPACE`, default `default`), removed when you exit. Leftovers
-  carry the label `k-vision/node-shell=true`.
-- **Audit log.** Every write, exec and port-forward is appended to
-  `~/.k-vision/audit.log` (JSON lines), including failures.
-- **Small and offline.** One Go binary of about 30 MB, with no Electron and no
-  network access beyond your clusters. The desktop UI's assets are embedded.
+---
+
+## What it is
+
+K-Vision is one program, `kv`, with two ways to use it:
+
+- **A desktop window** — like Lens. Click through clusters, read logs, open a shell, edit YAML.
+- **A terminal UI** — like k9s. Fast, keyboard only, works over SSH.
+
+Both read your kubeconfig exactly like `kubectl` does. **If `kubectl get pods` works, K-Vision works** — on EKS,
+GKE, AKS, kind, minikube or anything else. Nothing is installed in your clusters, and nothing leaves your
+computer except the calls to your own clusters.
 
 ## Install
 
-**See [INSTALL.md](INSTALL.md)** -- download from this project's **Deploy → Releases** and install on macOS,
-Windows or Linux (and how to uninstall, update, or build from source). In short:
+Download the file for your computer from the **[latest release](https://github.com/jahangirov001/k-vision/releases/latest)**:
 
-| | Install | Uninstall |
+| Your computer | Download | Then |
 |---|---|---|
-| **macOS** | unzip, then `./install.sh` (or drag from the `.dmg`) | `./install.sh --uninstall` |
-| **Windows** | unzip, then `powershell -ExecutionPolicy Bypass -File install.ps1` | `… install.ps1 -Uninstall` |
-| **Linux** | `tar xzf …`, then `./install.sh` | `./install.sh --uninstall` |
+| **Mac** (Apple silicon or Intel, macOS 12+) | `K-Vision-…-macos.dmg` | Open it, drag **K-Vision** to Applications. First time: right-click → **Open**. |
+| **Windows 10 / 11** | `K-Vision-…-windows-amd64.zip` | Unzip, run `install.ps1` (see below). |
+| **Linux** | `K-Vision-…-linux-amd64.tar.gz` | Unpack, run `./install.sh`. |
 
-| | macOS | Windows | Linux |
-|---|---|---|---|
-| Terminal UI (`kv`) | ✓ | ✓ (Windows Terminal recommended) | ✓ |
-| Desktop window (`kv ui`) | native app window | Edge / Chrome app window | Chrome / Chromium / Edge app window |
-| Shells, logs, port-forward, files, cost, topology | ✓ | ✓ | ✓ |
+On Windows, in PowerShell inside the unzipped folder:
 
-It reads your kubeconfig exactly as kubectl does (`$KUBECONFIG`, then `~/.kube/config`).
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+No admin rights are needed anywhere. **[INSTALL.md](INSTALL.md)** has every step, ARM builds, updating,
+uninstalling and building from source.
+
+## What you can do
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/topology.png" alt="Cluster Topology"></td>
+<td width="50%"><img src="docs/images/warnings.png" alt="Warnings dashboard"></td>
+</tr>
+<tr>
+<td><b>Cluster Topology</b> — node pools, every node coloured by load, and which namespaces run where.</td>
+<td><b>Warnings</b> — every warning in the cluster, grouped by problem, with what to check.</td>
+</tr>
+</table>
+
+**Find problems fast**
+
+- **All clusters at once.** One list of pods (or anything else) across every cluster in your kubeconfig.
+  A cluster you can't reach is shown on its own line and doesn't block the rest.
+- **"Why?" in plain words.** For a broken pod, K-Vision reads its status and events and tells you what's wrong:
+  *not enough memory on any node*, *crash-looping, killed for using too much memory*, *can't pull the image*…
+- **Warnings dashboard.** All warning events, grouped so 40 identical messages become one line, broken things
+  first, with the node pool and a hint for what to look at.
+- **Health at a glance.** Rows are green, amber or red; tabs count how many are failing.
+- **Live CPU and memory** per pod, with a bar that turns amber at 70% and red at 90% of the limit.
+
+**Work with resources**
+
+- Logs (live, previous container, search, several pods merged in time order), shells into pods, and a root
+  shell on a node.
+- Edit YAML, create from templates (checked by the cluster before it's created), scale, restart, cordon, drain,
+  port-forward, copy files to and from pods.
+- Every resource type, including CRDs. Argo CD, Karpenter, KEDA and Helm get their own views and dashboards;
+  Helm doesn't even need the `helm` command.
+- **Cost** per namespace or workload, if the cluster runs OpenCost or Kubecost.
+
+**Stay safe**
+
+- Deleting or editing asks you to type the object's name. Deleting many at once on a real cluster asks you to
+  type `delete`.
+- Clusters on your own machine (kind, minikube, Docker Desktop…) are "safe" and ask less.
+- Every change is written to an audit log at `~/.k-vision/audit.log`.
+- The desktop window only talks to `127.0.0.1` and refuses requests from web pages.
+
+<p align="center">
+  <img src="docs/images/start.png" alt="Start screen: choose a cluster" width="49%">
+  <img src="docs/images/pods-light.png" alt="Light theme" width="49%">
+</p>
+<p align="center"><sub>The start screen, and the light theme (it follows your system, or pick one in Settings).</sub></p>
+
+## Getting started
+
+1. Open **K-Vision** (Spotlight, Start menu or app menu), or run `kv ui` in a terminal.
+2. Pick a cluster and press **Continue**.
+3. Use the sidebar, or press **⌘K** (Ctrl+K) and type what you want: `pods`, `warnings`, `topology`, a cluster name…
+
+Prefer the terminal? Run `kv`. `kv help` lists every command and key.
+
+```sh
+kv                          # pods in the current cluster
+kv deploy                   # start on deployments
+kv --context my-cluster nodes
+kv ui                       # open the desktop window
+```
 
 ## Filtering
 
-One filter language in both UIs (`/` in the terminal, the filter box in the window).
-Terms are separated by spaces and must all match.
+Type in the filter box (or press `/`). Words are combined with AND.
 
-| Filter | Matches |
+| Type | To see |
 |---|---|
-| `repo` | name, namespace, status or any column contains it |
-| `-kube-system` | a leading minus excludes |
-| `"two words"` | quotes keep a phrase together |
-| `!ok` · `is:failing` | unhealthy only · health is healthy/warning/failing/unhealthy |
-| `ns:shop` · `status:crash\|error` | a field contains it; `\|` means or. Any column works (`node:`, `sync:`, `image:`) |
-| `restarts>3` · `age<1h` | numeric and age compare (`> < >= <=`, units `s m h d w`) |
-| `app=web` · `tier!=db` · `label:team` | label equals, differs, exists |
+| `api` | anything whose name, namespace, status or columns contain "api" |
+| `!ok` | only things that aren't healthy |
+| `ns:shop` | only the `shop` namespace |
+| `status:crash\|error` | status contains "crash" or "error" |
+| `restarts>3` · `age<1h` | more than 3 restarts · created in the last hour |
+| `app=web` · `-kube-system` | label `app` is `web` · hide anything with "kube-system" |
 
-The window also has health tabs with counts (All, Failing, Warning, Healthy), quick
-filters for each resource type ("Restarting", "Out of sync", "Cordoned"…), and chips
-that show how each term was read. Keys `1` to `4` switch the health tab in both UIs.
-The Go and browser versions are tested against the same cases
-(`internal/kube/testdata/filter_cases.json`).
+## Keyboard
 
-## Theme
+The same keys work in the window and the terminal.
 
-System follows macOS light/dark, and switches live when macOS does.
+| Key | Does | | Key | Does |
+|---|---|---|---|---|
+| `⌘K` / `:` | jump to anything | | `l` | logs |
+| `/` | filter | | `s` | shell (pod or node) |
+| `j` `k` | move down / up | | `x` | why is it unhealthy? |
+| `Enter` | details / YAML | | `e` | edit |
+| `1`–`4` | All / Failing / Warning / Healthy | | `Ctrl+D` | delete |
+| `Space` | select a row | | `?` | all keys |
 
-The window has a **System / Light / Dark** switch at the bottom of the sidebar.
-System follows macOS. The terminal UI adapts to your terminal's background;
-`KV_THEME=light` or `KV_THEME=dark` forces one.
+## Settings
 
-## Terminal: `kv`
+Most things are in **Settings** (⌘,) in the app. A few can be set as environment variables before starting `kv`:
 
-`kv help` prints the full guide of commands, filters and keys, and `?` shows it inside the app.
+| Variable | Default | What it does |
+|---|---|---|
+| `KV_SAFE` | local clusters only | A regular expression of cluster names that should ask less before changes |
+| `KV_AUDIT_LOG` | `~/.k-vision/audit.log` | Where changes are recorded |
+| `KV_THEME` | follows the terminal | `light` or `dark` for the terminal UI |
+| `KUBE_EDITOR` / `EDITOR` | `vi` | Editor for `e` in the terminal |
+
+Your settings, the audit log and other data live in `~/.k-vision/`.
+
+## Building from source
+
+You need Go 1.27+ (and on a Mac, the Xcode command line tools: `xcode-select --install`).
 
 ```sh
-kv                    # pods on the current context
-kv deploy             # start on deployments
-kv --context payments-dev nodes
+git clone https://github.com/jahangirov001/k-vision.git
+cd k-vision
+make test        # run the tests
+./install.sh     # build and install (Mac: the app + kv; Linux: kv)
 ```
 
-| Key | Does |
-|---|---|
-| `:` | command, with autocomplete: Tab completes, ↑↓ picks. Any resource type (`po`, `deploy`, `app`, `nodepools`, `scaledobjects`…), `all <kind> [filter]`, `ctx <name>`, `ns <name>\|all`, `pf`, `audit`, `q` |
-| `/` | filter as you type: text, `!ok` for unhealthy only, `label=value` |
-| `j` `k` `g` `G` `PgUp` `PgDn` | move |
-| `Enter` / `y` | YAML |
-| `x` | why is this pod unhealthy |
-| `l` / `p` | logs (follow) / logs of the previous, crashed container. `l` on a Deployment, StatefulSet, DaemonSet, ReplicaSet or Job, or with several pods marked, **merges every pod's logs** in time order, coloured per pod |
-| `s` | shell: into a pod (bash, else sh), or on a **node** a root shell on the host |
-| `v` | decoded values of a Secret or ConfigMap |
-| `e` | edit in `$KUBE_EDITOR` / `$EDITOR`, applied on save after confirmation |
-| `S` / `r` | scale / rollout restart |
-| `f` | port-forward (`0:8080` picks a free local port) |
-| `c` / `D` | cordon-uncordon / drain a node (evicts via the Eviction API, so PDBs hold) |
-| `Space` / `Ctrl+A` | mark a row / mark every row shown (up to 100) |
-| `Ctrl+D` | delete the row, or every marked row |
-| `C` | cluster picker |
-| `T` / `H` / `N` | Cluster Topology / Helm releases / create a resource from YAML |
-| `n` / `0` | this row's namespace / all namespaces |
-| `?` | all of the above |
-
-In the log view: `/` find, `F` follow on/off, `P` previous container, `c` next
-container, `w` save to `~/Downloads`.
-
-Everything the window does, the terminal does too:
-
-| Command | Does |
-|---|---|
-| `:topology` | **Cluster Topology**: node pools with every node (coloured by CPU requested), CPU/memory bars, and each namespace with the pools its pods run on. `+system` adds kube-system & co |
-| `:topology <ns>` | **Namespace Topology** as a tree: Ingress → Service → workload (pods as dots, HPA/KEDA/PDB badges) → ConfigMaps/Secrets, missing ones in red |
-| `:helm` · `:helm charts` | Helm releases / charts (no helm binary needed) |
-| `:helm <release> [values\|all\|manifest\|notes\|history] [rev]` | one release in full |
-| `:create [kind]` · `:create -f file.yaml` | create from YAML: a template opens in `$EDITOR`, the server validates it (dry run), then it is created after confirmation |
-| `:ls [dir]` | browse a directory in the selected pod or node |
-| `:cp <path> [local dir]` | copy a file (or a folder, as .tar) from the selected pod/node to `~/Downloads` |
-| `:cp put <file> [dir]` | copy a file into the selected pod/node (`/tmp` by default) |
-| `:overview <ns>` | Namespace Overview: every resource in it, grouped by kind |
-| `:audit` | every change made from K-Vision |
-
-Logs are coloured the same way as in the window (levels, timestamps, key=value, HTTP codes).
-
-## Desktop: `kv ui`
-
-Opens a window (Chrome app mode if Chrome is installed, otherwise your default
-browser) on `http://127.0.0.1:7788`. The same keys work: `j`/`k`, `Enter`, `l`, `s`,
-`x`, `e`, `Ctrl+D`, `/`, and `⌘K` or `:` for the command palette (every resource
-type, every context, actions). Click a row for the side panel with **Why? · YAML ·
-Logs · Shell**, and the actions the resource supports.
-
-The server only listens on localhost. Every API call needs a random token generated
-for that run, which is in the URL it opens. It refuses cross-origin requests and
-foreign `Host` headers, so a web page you visit can't use it.
-
-## Deleting several at once
-
-Tick rows with the checkbox column (Shift-click selects a range, the header box
-selects everything shown) or press `Space` on each. A bar shows **N selected** with
-**Delete N…**. In the terminal, `Space` marks, `Ctrl+A` marks all shown and `Ctrl+D`
-deletes the marked rows. A selection can span clusters in the all-clusters view.
-
-- On safe clusters, one confirmation.
-- On real clusters, type `delete` to confirm. The server checks it too.
-- At most 100 at a time. Filter first, for example `status:error ns:payments`, then
-  select all.
-- Each object is backed up and audited like a single delete. If one fails, the rest
-  still go ahead, the error is shown, and the failed ones stay selected.
-
-## Start screen
-
-Opening the app shows every cluster as a card, with a live check
-of each one (Kubernetes version and node count, or why it can't be reached, such as
-an expired login or a VPN-only endpoint). Type to search, use the arrow keys, press
-Enter or click to open a cluster. **All clusters at once** opens the combined view.
-Your recently opened clusters come first. Click **K-Vision** at the top of the
-sidebar, or choose *Start screen* in ⌘K, to come back to it.
-
-## Removing and deleting clusters
-
-**Manage clusters** under the cluster list, or right-click any cluster, gives two
-different actions:
-
-| | What it does | kubectl | Undo |
-|---|---|---|---|
-| **Remove from list** (✕ on hover) | Hides it from K-Vision's lists only. Stored in `~/.k-vision/settings.json`. | still has it | **Put back** |
-| **Delete from kubeconfig…** | Deletes it from `~/.kube/config`, like Lens or `kubectl config delete-context`. Its cluster and credentials go too, unless another context still uses them. | loses it | the backup in `~/.k-vision/kubeconfig-backups/` |
-
-Delete always asks you to type the cluster's name. kubectl's current context can't
-be removed or deleted. In the terminal, the cluster picker (`C`) has `h` for remove /
-put back and `d` for delete.
-
-## Creating resources
-
-**＋ Create** in the top bar (or `N`, or ⌘K → Create) opens a YAML editor with a
-template for the list you're on: Deployment, Pod, Service, Ingress, ConfigMap,
-Secret, Job, CronJob, StatefulSet, DaemonSet, PVC, HPA, PDB, NetworkPolicy,
-ServiceAccount, Role, RoleBinding, ResourceQuota, Namespace, or a skeleton for any
-other kind. Edit it, or replace it with YAML you paste (several objects separated by
-`---` are fine). **Validate** asks the API server to check it without creating
-anything; **Create** (⌘↵) creates it. On a protected cluster you type the cluster's
-name first. Every create is in the audit log.
-
-## Copying files
-
-The **Files** tab on a pod or a node works like `kubectl cp`: browse folders,
-download a file (or a folder as `.tar`), and upload files into the folder you're in
-with **Upload…** or by dropping them on the list. Pods need `tar` and `sh` in the
-image (distroless images can't do this). Node files go through a short-lived helper
-pod with the host's filesystem at `/host`. Uploading on a protected cluster asks for
-the pod's or node's name. Every copy is in the audit log.
-
-## Namespace Overview
-
-**Namespace Overview** (top of Workloads, or ⌘K) is `kubectl get all -n <ns>`
-done properly: every kind of resource that has something in the namespace, not just
-the eight `get all` covers. That includes Secrets, ConfigMaps, PDBs, NetworkPolicies,
-RBAC and every CRD (Argo CD Applications, TargetGroupBindings…). Each kind is a
-section with its own columns, health and counts, plus a jump bar and a filter.
-Events, endpoints and leases are left out unless you tick the box. In the terminal:
-`:overview <namespace>` (or `:get-all`).
-
-## Topology
-
-The **Topology** section of the sidebar has two views (⌘K → "topology", or View in the menu bar):
-
-- **Cluster Topology** — the whole cluster at a glance: totals (nodes, pods, CPU and
-  memory requested, ingresses, namespaces that need a look), every node pool
-  (Karpenter NodePool, EKS node group, Fargate) with each node drawn as a square coloured
-  by how much CPU its pods request, and a band from each namespace to the pools its pods
-  run on, as wide as the pod count. Platform namespaces (kube-system, monitoring…) are
-  hidden unless you tick them. Click a namespace to open its topology.
-- **Namespace Topology** — one namespace as the path traffic and configuration take:
-  **Ingress → Service → workload → ConfigMap / Secret / volume**. Pods are dots inside
-  their workload, coloured by health; ReplicaSets and a CronJob's Jobs are folded into
-  their owner; HPAs, KEDA ScaledObjects and PDBs are badges ("PDB blocks drains" when it
-  allows no disruption). Arrows are labelled *routes*, *selects*, *reads*, *mounts*.
-
-Nothing is dimmed or blurred on the full map. **Click** a box to open its own view: only that resource and everything
-connected to it, laid out **top to bottom** (Traffic → Services → Workloads → Config), with the selected one
-highlighted; click another box there to move to it, **← All of <namespace>** or Esc to go back. Double-click opens it.
-What's broken stands out: an Ingress whose backend Service doesn't exist, a Service
-that selects no pods, a Secret or ConfigMap a workload needs but the namespace lacks
-(red, dashed). References marked `optional: true` that are absent are grey, dashed.
-
-### Helm Topology
-
-**Topology → Helm Topology** (or the *Helm* switch in the map bar; `:topology helm` in the terminal) answers
-*which Helm release created what*. Pick a release and see every resource in its manifest, grouped by kind
-(traffic, workloads, config, RBAC, CRDs), each with its live state. Anything Helm installed that is no longer
-in the cluster shows as **missing** in red, and a release is only green when everything it made is healthy.
-Search finds a release by name, chart, or any resource it created. Click the release card for its values,
-history and manifest; double-click a resource to open it.
-
-## Argo CD, Pod Autoscaling, Node Autoscaling
-
-The sidebar groups these by what they do:
-
-| Section | Holds |
-|---|---|
-| **Argo CD** | **Dashboard** (apps by health and sync, what needs a look, recent syncs, by project / destination / repository, Application Sets), **Applications** (sync, health, project, repo, revision, destination, last sync), **Application Sets** (generators, how many apps they made), **Projects** |
-| **Pod Autoscaling** | HPAs (target, min/max, current → desired replicas, metrics, *At max* when stuck at the ceiling), VPAs, KEDA ScaledObjects and ScaledJobs (with their triggers), TriggerAuthentications |
-| **Node Autoscaling** | Karpenter NodePools, EC2NodeClasses (AMI, role, subnets, security groups), NodeClaims, NodeOverlays |
-
-Sections only appear for what the cluster runs. The Dashboard is read from the cluster's Argo CD objects, so no
-Argo CD login is needed. In the terminal: `:argo`.
-
-## Cost
-
-**Cost → Cost Overview** (⌘K → "cost"; `:cost` in the terminal) shows what the cluster costs, from the
-cluster's own **OpenCost** (or Kubecost); K-Vision finds it and talks to it over a private port-forward,
-nothing to configure. Pick a window (24h, 7 days, 30 days, this month) and group by namespace, workload, pod,
-node or `team` label. Each row has a CPU / memory / storage / network breakdown, the monthly rate, how much
-of the requested CPU and memory is really used, and **could save**: the cost of requested-but-unused
-resources, which is what right-sizing requests would take off the bill. *Idle* is node cost nobody requested
-(too-big or too-many nodes). Click a namespace to see its workloads. Answers are cached for ten minutes
-(Refresh asks again). Clusters without OpenCost get a two-line install hint instead.
-
-## Pod CPU and memory
-
-The Pods list shows live **CPU** and **MEMORY** (from metrics-server, like `kubectl top`) with a bar for the share
-of the pod's limit, or of its request when there's no limit. It turns amber at 70% and red at 90%, and a running pod
-at 90% of its memory limit is marked as a warning, since that's where OOM kills start. Click the column to sort by it.
-Without metrics-server in the cluster the columns show "—".
-
-## Helm
-
-The **Helm** section lists **Releases** (chart, version, app version, revision,
-status, last update) and **Charts** (every chart deployed in the cluster, which
-versions, and which releases use them). Open a release for its values, all values
-(with the chart's defaults), manifest, notes and full revision history; click an
-old revision to see what it was. It's read straight from the cluster, so it doesn't
-need the `helm` binary.
-
-## Resizing
-
-Drag the edge between any two panes: the sidebar's right edge, the details panel's
-left edge, or the top of the shell/logs dock. Sizes are remembered; double-click an
-edge to reset it. Sidebar sections (Clusters, Workloads, Network…) fold and unfold
-with a click and remember how you left them.
-
-## Shells and logs in tabs
-
-Shells and logs open as tabs in a dock along the bottom of the window. Each tab
-keeps its own connection, so you can switch cluster or resource, or open more
-tabs, without losing a session. Every tab carries its cluster's colour and name.
-Drag the top edge to resize the dock; ▾ minimizes it.
-
-- **Shell:** `s` on a pod or a node, or the Shell / Node shell button.
-- **Logs of several pods:** tick pods and press **Logs of N** (or `l`), or use
-  **Logs of all pods** on a Deployment, StatefulSet, DaemonSet, ReplicaSet or Job.
-  Lines from every pod, even across clusters, are merged in time order, each pod
-  in its own colour. Click a pod's chip to hide or show its lines. Up to 20 pods
-  per tab.
-
-### Split view
-
-Shells and logs open as tabs in the bottom panel. With two or more open, **◫ Split** shows them all at once, side by
-side, each with its own title bar and close button; **⇆ / ⇅** switches between side by side and stacked, and
-**▭ Tabs** goes back. The choice is remembered. Merged logs of several pods have **◫ One per pod**, which opens each
-pod in its own pane.
-
-## Log colours
-
-Logs are coloured by part: timestamps in grey-blue, a level badge (ERROR, WARN,
-INFO, DEBUG), `key=value` keys in blue, quoted strings in green, numbers and
-durations in amber, URLs underlined. Error lines get a red tint and a red edge,
-warnings amber. JSON, logfmt and klog lines are all recognised.
-
-## Configuration
-
-| Env | Default | |
-|---|---|---|
-| `KV_SAFE` | local clusters only | Regexp of cluster names that are **not** protected (replaces the default) |
-| `KV_AUDIT_LOG` | `~/.k-vision/audit.log` | Where writes are recorded |
-| `KUBE_EDITOR`, `EDITOR` | `vi` | Editor for `e` in the terminal |
-
-## Layout
+How the code is organised:
 
 ```
-cmd/kv            the binary: terminal UI, or `kv ui`
-internal/kube     clusters, resources, health rules, writes + audit, logs/exec/port-forward, explain
-internal/tui      Bubble Tea terminal UI
-internal/web      localhost API + embedded single-page UI (static/)
+cmd/kv           the program: terminal UI, or `kv ui` for the window
+internal/kube    talking to clusters: resources, health, changes + audit log, logs, shells, explanations
+internal/tui     the terminal UI
+internal/web     the desktop UI: a local server and the page it serves
+internal/window  the native macOS window
+packaging        app icon and macOS app bundle
 ```
 
-`make test` runs the unit tests. They need no cluster: they cover the health rules,
-the explainer, the protected-context check and the server's token, Origin, Host and
-confirmation checks.
+### Making a release
 
-## Roadmap
+1. Put the new number in `internal/version/VERSION` (for example `1.0.7`) and commit it.
+2. Tag the commit and push the tag:
+   ```sh
+   git tag 1.0.7 && git push origin 1.0.7
+   ```
 
-- Metrics (CPU/memory per pod and node, via metrics-server) and sparklines.
-- Relationship view: Ingress → Service → Pods, Deployment → ReplicaSets → Pods.
-- "Investigate with DevOps Agent": send a pod's status, events and logs to the
-  AgentSpace bridge.
-- Watch-based updates (informers) instead of 5-second polling.
-- Native window (Wails) instead of the browser app window.
+GitHub Actions then tests everything, builds the Mac app (universal), Windows and Linux packages, and publishes
+them on the **Releases** page with a `SHA256SUMS` file. If the tag and `VERSION` don't match, nothing is
+published.
+
+## Good to know
+
+- **The Mac app isn't notarized** by Apple, so the first time you open it macOS asks: right-click → **Open**.
+  `install.sh` does this for you.
+- **On Windows and Linux** the window opens in Edge or Chrome as an app window of its own. The terminal UI works
+  everywhere.
+- **Windows SmartScreen** may warn about `kv.exe` because it isn't code-signed: **More info → Run anyway**.

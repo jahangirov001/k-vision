@@ -904,10 +904,12 @@ td.usage .u-val { text-align: right; }
 .wl-row .wl-recent { justify-self: end; font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
 
 /* Lens-like table: names read from the start; namespace is a link */
-#table th:has(+ th), #table th { text-align: left; }
-#table th.num, #table td.num { text-align: right; }
-#table td.name, #table td.mono, #table td.status-cell { text-align: left; }
-#table td.usage { text-align: left; }
+/* Every header and every value starts at the column's left edge, like Lens. (Numeric
+   headers used to be right-aligned while `td.mono` pulled their values left, so READY,
+   RESTARTS and AGE values sat left of their headers.) */
+#table th, #table td { text-align: left; }
+/* CPU / MEMORY: value left in a fixed-width box, so the bars still line up row to row. */
+#table td.usage .u-val { text-align: left; }
 #table td.name { font-weight: 550; color: var(--text); }
 #table td.ns-link a { color: var(--accent); text-decoration: none; font-size: var(--fs-sm); }
 #table td.ns-link a:hover { text-decoration: underline; }
@@ -1007,3 +1009,37 @@ td.usage .u-val { text-align: right; }
 .ns-all-row { border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
 .ns-all-row span { font-family: var(--font-ui); font-weight: 600; }
 .ns-item input { width: 15px; height: 15px; }
+
+/* ---------- Warnings dashboard (showEvents): cluster events grouped by problem */
+#mapView:has(.ev-grid) { overflow: auto; }
+.ev-tl { gap: 6px; }
+.ev-bars { display: flex; align-items: flex-end; gap: 3px; height: 54px; }
+.ev-bars i { flex: 1; min-width: 3px; background: var(--warn); border-radius: 2px 2px 0 0; opacity: .85; }
+.ev-bars i:hover { opacity: 1; }
+.ev-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 10px; align-items: start; }
+.ev-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ev-problems { max-height: none; }
+.ev-cards { display: flex; flex-direction: column; }
+.ev-card { padding: 10px 14px 10px 12px; border-bottom: 1px solid var(--line-soft); border-left: 3px solid var(--warn); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ev-card.lvl-bad { border-left-color: var(--bad); }
+.ev-card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: var(--fs-sm); }
+.ev-card-h .grow { flex: 1; }
+.ev-chip { font-size: var(--fs-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.ev-msg { font-size: var(--fs-xs); color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.ev-hint { font-size: var(--fs-xs); color: var(--muted); }
+.ev-objs { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-size: var(--fs-xs); }
+.ev-obj { border: 1px solid var(--line); background: var(--sunken); color: var(--accent); border-radius: 6px; padding: 1px 7px; font-size: var(--fs-xs); cursor: pointer; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-obj:hover { border-color: var(--accent); }
+.argo-led.h-ok { background: var(--ok); } .argo-led.h-warn { background: var(--warn); } .argo-led.h-bad { background: var(--bad); }
+@media (max-width: 1100px) { .ev-grid { grid-template-columns: 1fr; } }
+.ev-gone { border: 1px solid var(--line); background: var(--sunken); border-radius: 8px; padding: 8px 10px; margin: 2px 0 4px; }
+.argo-panel > .ev-gone { margin: 8px 12px; }
+.ev-gone-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-sm); }
+.ev-gone-h .ghost { margin-left: auto; }
+.ev-gone pre { margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; font-size: var(--fs-xs); color: var(--muted); max-height: 180px; overflow: auto; }
+.ev-side .argo-table { table-layout: fixed; }
+.ev-side .argo-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev-side .argo-table td:first-child { width: auto; }
+.ev-side .argo-table td:nth-child(2) { width: 44%; }
+.ev-side .argo-table td:nth-child(2) .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+.ev-side .argo-table td:nth-child(3) { width: 84px; text-align: right; padding-left: 6px; }

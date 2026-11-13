@@ -1,0 +1,158 @@
+# Builds the release files and publishes a GitHub Release.
+#
+# How to release: put the new number in internal/version/VERSION, commit, then
+#   git tag 1.0.7 && git push origin 1.0.7
+# (a "v" in front, v1.0.7, works too). The tag must match VERSION, or nothing is published.
+#
+# You can also run it by hand (Actions → Release → Run workflow): it builds everything
+# and keeps the files as a downloadable artifact, without publishing a release.
+name: Release
+
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: v
+        name: Version
+        run: |
+          VERSION="$(cat internal/version/VERSION)"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match internal/version/VERSION ($VERSION)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - run: make test
+
+  # Linux and Windows: plain Go builds, no cgo. The window opens in Chrome / Edge app mode there.
+  linux-windows:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.test.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build packages
+        run: |
+          mkdir -p dist/stage
+          go run packaging/macos/icon.go dist/stage/k-vision.png
+          for p in linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
+            os=${p%/*}; arch=${p#*/}; d="dist/stage/K-Vision-$VERSION-$os-$arch"; mkdir -p "$d"
+            echo "  $os/$arch"
+            if [ "$os" = windows ]; then
+              GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$d/kv.exe" ./cmd/kv
+              cp install.ps1 "$d/"
+              (cd dist/stage && zip -qr "../K-Vision-$VERSION-$os-$arch.zip" "K-Vision-$VERSION-$os-$arch")
+            else
+              GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$d/kv" ./cmd/kv
+              cp install.sh dist/stage/k-vision.png "$d/"
+              tar -C dist/stage -czf "dist/K-Vision-$VERSION-$os-$arch.tar.gz" "K-Vision-$VERSION-$os-$arch"
+            fi
+          done
+          rm -rf dist/stage
+          ls -lh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-windows
+          path: dist/K-Vision-*
+          if-no-files-found: error
+
+  # macOS: the native window needs cgo and the macOS SDK, so it builds on a Mac runner.
+  # One universal app for Apple silicon and Intel, macOS 12 or newer.
+  macos:
+    needs: test
+    runs-on: macos-14
+    env:
+      VERSION: ${{ needs.test.outputs.version }}
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      CGO_CFLAGS: -mmacosx-version-min=12.0
+      CGO_LDFLAGS: -mmacosx-version-min=12.0
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the app
+        run: |
+          mkdir -p dist/stage
+          GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o dist/stage/kv-arm64 ./cmd/kv
+          GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/stage/kv-amd64 ./cmd/kv
+          lipo -create -output dist/stage/kv dist/stage/kv-arm64 dist/stage/kv-amd64
+          out="dist/stage/K-Vision-$VERSION-macos"; mkdir -p "$out"
+          packaging/macos/bundle.sh dist/stage/kv "$out" "$VERSION"
+          cp install.sh "$out/"
+          (cd dist/stage && ditto -c -k --keepParent "K-Vision-$VERSION-macos" "../K-Vision-$VERSION-macos.zip")
+          ln -s /Applications "$out/Applications"
+          hdiutil create -quiet -volname "K-Vision $VERSION" -srcfolder "$out" -ov -format UDZO "dist/K-Vision-$VERSION-macos.dmg"
+          rm -rf dist/stage
+          ls -lh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/K-Vision-*
+          if-no-files-found: error
+
+  publish:
+    needs: [test, linux-windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.test.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum K-Vision-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Keep the files (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: K-Vision-${{ env.VERSION }}
+          path: dist/*
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "## Download"
+            echo
+            echo "| Your computer | File |"
+            echo "|---|---|"
+            echo "| Mac (Apple silicon or Intel), macOS 12+ | \`K-Vision-$VERSION-macos.dmg\` or \`.zip\` |"
+            echo "| Windows 10 / 11 | \`K-Vision-$VERSION-windows-amd64.zip\` |"
+            echo "| Windows on ARM | \`K-Vision-$VERSION-windows-arm64.zip\` |"
+            echo "| Linux (Intel / AMD) | \`K-Vision-$VERSION-linux-amd64.tar.gz\` |"
+            echo "| Linux on ARM | \`K-Vision-$VERSION-linux-arm64.tar.gz\` |"
+            echo
+            echo "Step-by-step instructions: [INSTALL.md](https://github.com/${GH_REPO}/blob/${GITHUB_REF_NAME}/INSTALL.md)."
+            echo "The Mac app isn't notarized: the first time, right-click it → **Open** (or use \`install.sh\`)."
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "K-Vision $VERSION" --notes-file notes.md --generate-notes
