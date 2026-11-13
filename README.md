@@ -10,10 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jahangirov001/k-vision/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/nazim-jahangir/k-vision/releases/latest"><b>Download</b></a> ·
   <a href="INSTALL.md">Install guide</a> ·
   <a href="#what-you-can-do">Features</a> ·
   <a href="#keyboard">Keys</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/nazim-jahangir/k-vision/releases/latest"><img src="https://img.shields.io/github/v/release/nazim-jahangir/k-vision?label=version" alt="Latest version"></a>
+  <a href="https://github.com/nazim-jahangir/k-vision/releases"><img src="https://img.shields.io/github/downloads/nazim-jahangir/k-vision/total?label=downloads" alt="Total downloads"></a>
 </p>
 
 <p align="center">
@@ -26,8 +31,8 @@
 
 K-Vision is one program, `kv`, with two ways to use it:
 
-- **A desktop window** — like Lens. Click through clusters, read logs, open a shell, edit YAML.
-- **A terminal UI** — like k9s. Fast, keyboard only, works over SSH.
+- **A desktop window** — click through clusters, read logs, open a shell, edit YAML.
+- **A terminal UI** — fast, keyboard only, works over SSH.
 
 Both read your kubeconfig exactly like `kubectl` does. **If `kubectl get pods` works, K-Vision works** — on EKS,
 GKE, AKS, kind, minikube or anything else. Nothing is installed in your clusters, and nothing leaves your
@@ -35,7 +40,7 @@ computer except the calls to your own clusters.
 
 ## Install
 
-Download the file for your computer from the **[latest release](https://github.com/jahangirov001/k-vision/releases/latest)**:
+Download the file for your computer from the **[latest release](https://github.com/nazim-jahangir/k-vision/releases/latest)**:
 
 | Your computer | Download | Then |
 |---|---|---|
@@ -82,9 +87,23 @@ uninstalling and building from source.
   shell on a node.
 - Edit YAML, create from templates (checked by the cluster before it's created), scale, restart, cordon, drain,
   port-forward, copy files to and from pods.
-- Every resource type, including CRDs. Argo CD, Karpenter, KEDA and Helm get their own views and dashboards;
-  Helm doesn't even need the `helm` command.
-- **Cost** per namespace or workload, if the cluster runs OpenCost or Kubecost.
+- Every resource type, including CRDs. Karpenter, KEDA and HPAs get their own columns and health.
+
+**See how it fits together**
+
+- **Topology**, three ways:
+  - **Cluster** — node pools and their nodes, and which namespaces run on which pool.
+  - **Namespace** — the path from Ingress → Service → workload → ConfigMaps and Secrets, with anything broken
+    or missing in red.
+  - **Helm** — which release created what, and whether all of it is still there and healthy.
+- **Argo CD** — a dashboard of your Argo CD apps: health and sync, what needs a look, the latest syncs, and apps
+  by project, destination and repository. It reads the cluster directly, so no Argo CD login is needed.
+- **Helm** — releases and charts with values, manifest, notes and full history, without the `helm` command.
+- **Cost** — what the cluster costs per namespace, workload, pod, node or team, how much of it is idle, and how
+  much right-sizing could save.
+  > **Needs [OpenCost](https://www.opencost.io) or [Kubecost](https://www.kubecost.com) installed in the
+  > cluster.** K-Vision reads the costs from it and finds it by itself, so there's nothing to configure in
+  > K-Vision. In a cluster without either, the Cost page shows how to install OpenCost.
 
 **Stay safe**
 
@@ -159,7 +178,7 @@ Your settings, the audit log and other data live in `~/.k-vision/`.
 You need Go 1.27+ (and on a Mac, the Xcode command line tools: `xcode-select --install`).
 
 ```sh
-git clone https://github.com/jahangirov001/k-vision.git
+git clone https://github.com/nazim-jahangir/k-vision.git
 cd k-vision
 make test        # run the tests
 ./install.sh     # build and install (Mac: the app + kv; Linux: kv)
@@ -175,18 +194,6 @@ internal/web     the desktop UI: a local server and the page it serves
 internal/window  the native macOS window
 packaging        app icon and macOS app bundle
 ```
-
-### Making a release
-
-1. Put the new number in `internal/version/VERSION` (for example `1.0.7`) and commit it.
-2. Tag the commit and push the tag:
-   ```sh
-   git tag 1.0.7 && git push origin 1.0.7
-   ```
-
-GitHub Actions then tests everything, builds the Mac app (universal), Windows and Linux packages, and publishes
-them on the **Releases** page with a `SHA256SUMS` file. If the tag and `VERSION` don't match, nothing is
-published.
 
 ## Good to know
 

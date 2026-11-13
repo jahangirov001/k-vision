@@ -1541,7 +1541,7 @@ function showClusters() {
   $("#panelBody").replaceChildren(
     el("div", { class: "explain" },
       el("div", {}, el("strong", { text: "Remove" }), " takes a cluster out of K-Vision's lists only. Your kubeconfig isn't changed and kubectl keeps it. Put back restores it."),
-      el("div", {}, el("strong", { text: "Delete…" }), " deletes it from your kubeconfig file, like Lens or kubectl config delete-context. kubectl loses it too. The file is backed up first.")),
+      el("div", {}, el("strong", { text: "Delete…" }), " deletes it from your kubeconfig file, like kubectl config delete-context. kubectl loses it too. The file is backed up first.")),
     el("ul", { class: "list" }, S.contexts.map((c) => row(c, false))),
     S.hiddenCtx.length ? el("div", { class: "grp-title", text: `Removed (${S.hiddenCtx.length})` }) : null,
     S.hiddenCtx.length ? el("ul", { class: "list" }, S.hiddenCtx.map((c) => row(c, true))) : null);

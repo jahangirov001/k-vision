@@ -264,7 +264,7 @@ func Guide(width int) string {
 		{"kv", "terminal UI on your current kubeconfig context"},
 		{"kv deploy", "start on deployments (any resource type works)"},
 		{"kv --context payments-dev nodes", "start on another cluster"},
-		{"kv ui", "desktop window (Lens-style) on 127.0.0.1"},
+		{"kv ui", "desktop window on 127.0.0.1"},
 		{"kv restart", "quit and reopen the K-Vision window (after an update or an SSO login)"},
 		{"kv help", "this guide"},
 	} {

@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   test:
+    # Pull requests from forks don't run here: outside contributors never use this
+    # repository's Actions. (A skipped job still counts as passed for the main ruleset.)
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

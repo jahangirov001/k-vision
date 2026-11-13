@@ -19,7 +19,7 @@ There are two ways to get it:
 
 ## A. Download a release
 
-1. Open the **[latest release](https://github.com/jahangirov001/k-vision/releases/latest)** (or **Releases**
+1. Open the **[latest release](https://github.com/nazim-jahangir/k-vision/releases/latest)** (or **Releases**
    on the right of the project page).
 2. Take the newest release and download the file for your computer:
 
@@ -119,14 +119,14 @@ You need **Git** and **Go 1.27** or newer. On a Mac also the Xcode command line 
 (`xcode-select --install`) -- they build the native window.
 
 ```sh
-git clone https://github.com/jahangirov001/k-vision.git
+git clone https://github.com/nazim-jahangir/k-vision.git
 cd k-vision
 ./install.sh                 # macOS: builds and installs K-Vision.app + kv
                              # Linux: builds and installs kv
 ```
 On Windows (PowerShell, with Go installed):
 ```powershell
-git clone https://github.com/jahangirov001/k-vision.git
+git clone https://github.com/nazim-jahangir/k-vision.git
 cd k-vision
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```

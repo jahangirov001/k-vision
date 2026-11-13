@@ -80,7 +80,7 @@ jobs:
   # One universal app for Apple silicon and Intel, macOS 12 or newer.
   macos:
     needs: test
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       VERSION: ${{ needs.test.outputs.version }}
       MACOSX_DEPLOYMENT_TARGET: "12.0"
